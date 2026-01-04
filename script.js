@@ -769,6 +769,8 @@ function closeConfirmModal() {
 
 // === TELEGRAM БОТ (ОПТИМИЗИРОВАННАЯ ЛОГИКА ДЛЯ MINIAPP) ===
 async function openTelegramBot() {
+    console.log('🎯 openTelegramBot() вызвана');
+    
     if (!selectedPainting) {
         showNotification('Сначала выберите картину', 'error');
         return;
@@ -776,6 +778,8 @@ async function openTelegramBot() {
 
     // Проверяем, находимся ли мы в Telegram MiniApp
     const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
+    console.log('📱 Telegram WebApp:', isTelegramWebview);
+    console.log('🎨 Выбранная картина:', selectedPainting);
     
     try {
         closeConfirmModal();
@@ -790,6 +794,8 @@ async function openTelegramBot() {
             const userId = localStorage.getItem('user_id') || `user_${Date.now()}`;
             localStorage.setItem('user_id', userId);
             
+            console.log('📤 Отправка запроса на создание заказа...');
+            
             const response = await fetch('/api/order/create', {
                 method: 'POST',
                 headers: {
@@ -803,13 +809,18 @@ async function openTelegramBot() {
                 })
             });
             
+            console.log('📥 Ответ от API:', response.status);
+            
             if (response.ok) {
                 const data = await response.json();
+                console.log('✅ Заказ создан:', data);
                 
                 // ВАЖНО: В MiniApp сразу закрываем без сообщений
                 if (isTelegramWebview) {
+                    console.log('🔒 Закрываем MiniApp...');
                     // Полностью закрываем MiniApp
                     window.Telegram.WebApp.close();
+                    console.log('✅ MiniApp закрыта');
                 } else {
                     // В обычном браузере открываем Telegram
                     const param = `order_${data.order_id}_${data.token}`;
@@ -830,9 +841,12 @@ async function openTelegramBot() {
             }
         } else {
             // Fallback: старый метод
+            console.log('⚠️ Используем fallback метод');
             if (isTelegramWebview) {
+                console.log('🔒 Закрываем MiniApp (fallback)...');
                 // В MiniApp просто закрываем
                 window.Telegram.WebApp.close();
+                console.log('✅ MiniApp закрыта (fallback)');
             } else {
                 // В обычном браузере открываем Telegram
                 const param = `order_${selectedPainting.id}`;
@@ -852,6 +866,8 @@ async function openTelegramBot() {
         selectedPainting = null;
         
     } catch (error) {
+        console.error('❌ Ошибка в openTelegramBot():', error);
+        
         // В MiniApp не показываем ошибки
         if (!isTelegramWebview) {
             hideLoading();
@@ -865,6 +881,7 @@ async function openTelegramBot() {
             }, 1000);
         } else {
             // В MiniApp просто закрываем при ошибке
+            console.log('🔒 Закрываем MiniApp при ошибке...');
             window.Telegram.WebApp.close();
         }
     }

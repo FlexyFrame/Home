@@ -652,130 +652,166 @@ footer {
     }
 
     .hero {
-        padding-top: 100px;
-        padding-bottom: 30px;
-        min-height: 60vh;
+        padding-top: 60px; /* Уменьшено с 100px */
+        padding-bottom: 20px; /* Уменьшено с 30px */
+        min-height: 50vh; /* Уменьшено с 60vh */
         display: flex;
         align-items: center;
         justify-content: center;
     }
 
     .hero h1 {
-        font-size: 32px;
-        margin-bottom: 15px;
+        font-size: 28px; /* Уменьшено с 32px */
+        margin-bottom: 12px;
         line-height: 1.2;
     }
 
     .hero p {
-        font-size: 16px;
-        margin-bottom: 30px;
-        line-height: 1.5;
+        font-size: 15px; /* Уменьшено с 16px */
+        margin-bottom: 20px; /* Уменьшено с 30px */
+        line-height: 1.4;
     }
 
     .gallery h2,
     .how-it-works h2,
     .about h2 {
-        font-size: 28px;
-        margin-bottom: 20px;
-        line-height: 1.3;
+        font-size: 24px; /* Уменьшено с 28px */
+        margin-bottom: 15px; /* Уменьшено с 20px */
+        line-height: 1.2;
     }
 
     .section-subtitle {
-        font-size: 16px;
-        margin-bottom: 30px;
-        line-height: 1.5;
+        font-size: 15px; /* Уменьшено с 16px */
+        margin-bottom: 20px; /* Уменьшено с 30px */
+        line-height: 1.4;
     }
 
     .hero-buttons {
         flex-direction: column;
         align-items: center;
-        gap: 15px;
+        gap: 12px; /* Уменьшено с 15px */
         width: 100%;
     }
 
     .btn-primary, .btn-secondary {
         width: 100%;
-        max-width: 280px;
-        padding: 14px 20px;
-        font-size: 16px;
-        min-height: 48px; /* Улучшение доступности */
+        max-width: 260px; /* Уменьшено с 280px */
+        padding: 12px 18px; /* Уменьшено с 14px 20px */
+        font-size: 15px; /* Уменьшено с 16px */
+        min-height: 44px; /* Уменьшено с 48px */
     }
 
     .gallery-grid {
         grid-template-columns: 1fr;
-        gap: 15px;
+        gap: 12px; /* Уменьшено с 15px */
     }
 
     .paint-card {
-        contain-intrinsic-size: 250px 300px; /* Оптимизация для content-visibility */
+        contain-intrinsic-size: 220px 280px; /* Уменьшено с 250px 300px */
     }
 
     .paint-card img {
-        height: 200px;
+        height: 180px; /* Уменьшено с 200px */
         object-fit: cover;
     }
 
     .paint-info {
-        padding: 15px;
+        padding: 12px; /* Уменьшено с 15px */
     }
 
     .paint-title {
-        font-size: 16px;
-        line-height: 1.3;
+        font-size: 15px; /* Уменьшено с 16px */
+        line-height: 1.2;
     }
 
     .paint-price {
-        font-size: 18px;
+        font-size: 16px; /* Уменьшено с 18px */
     }
 
     .steps {
         grid-template-columns: 1fr;
-        gap: 15px;
+        gap: 12px; /* Уменьшено с 15px */
     }
 
     .step {
-        padding: 20px;
-        contain-intrinsic-size: 200px 150px;
+        padding: 16px; /* Уменьшено с 20px */
+        contain-intrinsic-size: 180px 140px; /* Уменьшено с 200px 150px */
     }
 
     .step-number {
-        width: 50px;
-        height: 50px;
-        font-size: 20px;
+        width: 44px; /* Уменьшено с 50px */
+        height: 44px; /* Уменьшено с 50px */
+        font-size: 18px; /* Уменьшено с 20px */
+        margin-bottom: 12px; /* Добавлено для лучшего вида */
     }
 
     .step h3 {
-        font-size: 18px;
-        line-height: 1.3;
+        font-size: 16px; /* Уменьшено с 18px */
+        line-height: 1.2;
+        margin-bottom: 6px;
     }
 
     .step p {
-        font-size: 14px;
-        line-height: 1.5;
+        font-size: 13px; /* Уменьшено с 14px */
+        line-height: 1.4;
     }
 
     .how-it-works {
-        padding: 60px 0;
+        padding: 40px 0; /* Уменьшено с 60px */
     }
 
     .about {
-        padding: 60px 0;
+        padding: 40px 0; /* Уменьшено с 60px */
     }
 
     .about p {
-        font-size: 15px;
-        padding: 0 10px;
-        line-height: 1.6;
+        font-size: 14px; /* Уменьшено с 15px */
+        padding: 0 8px; /* Уменьшено с 10px */
+        line-height: 1.5;
+        margin-bottom: 15px; /* Уменьшено с 20px */
+    }
+
+    .about ul {
+        margin: 15px 0; /* Уменьшено с 20px */
+        padding-left: 15px; /* Уменьшено с 20px */
+    }
+
+    .about ul li {
+        margin: 8px 0; /* Уменьшено с 10px */
+        line-height: 1.5;
+        font-size: 14px;
+    }
+
+    .about h3 {
+        margin-top: 15px; /* Уменьшено с 25px */
+        margin-bottom: 10px; /* Уменьшено с 15px */
+        font-size: 16px; /* Добавлено для мобильных */
     }
 
     .footer-content {
         grid-template-columns: 1fr;
-        gap: 25px;
+        gap: 20px; /* Уменьшено с 25px */
         text-align: center;
+        padding: 20px 0; /* Добавлено отступы */
+    }
+
+    .footer-section h3 {
+        font-size: 16px; /* Добавлено для мобильных */
+        margin-bottom: 10px;
+    }
+
+    .footer-section p {
+        font-size: 13px; /* Добавлено для мобильных */
+        line-height: 1.4;
+    }
+
+    .footer-bottom {
+        padding-top: 15px; /* Уменьшено с 20px */
+        font-size: 12px; /* Добавлено для мобильных */
     }
 
     .paint-splatter {
-        opacity: 0.05;
+        opacity: 0.03; /* Уменьшено с 0.05 */
     }
 
     /* Улучшенная обработка тач-событий для мобильных */
