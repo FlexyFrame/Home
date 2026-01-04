@@ -767,20 +767,23 @@ function closeConfirmModal() {
     modal.removeAttribute('role');
 }
 
-// === TELEGRAM БОТ (УЛУЧШЕННАЯ ЛОГИКА ДЛЯ MINIAPP) ===
+// === TELEGRAM БОТ (ОПТИМИЗИРОВАННАЯ ЛОГИКА ДЛЯ MINIAPP) ===
 async function openTelegramBot() {
     if (!selectedPainting) {
         showNotification('Сначала выберите картину', 'error');
         return;
     }
 
+    // Проверяем, находимся ли мы в Telegram MiniApp
+    const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
+    
     try {
         closeConfirmModal();
-        showLoading('Подготовка заказа...');
         
-        // Проверяем, находимся ли мы в Telegram MiniApp
-        const isTelegramMiniApp = window.Telegram && window.Telegram.WebView;
-        const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
+        // В MiniApp не показываем индикатор загрузки
+        if (!isTelegramWebview) {
+            showLoading('Подготовка заказа...');
+        }
         
         if (apiAvailable) {
             // Используем API для создания заказа
@@ -803,24 +806,16 @@ async function openTelegramBot() {
             if (response.ok) {
                 const data = await response.json();
                 
-                // Формируем deep link с токеном
-                const param = `order_${data.order_id}_${data.token}`;
-                const url = `https://t.me/flexyframe_bot?start=${param}`;
-                
-                hideLoading();
-                
-                // ВАЖНО: В MiniApp просто закрываем окно, Telegram сам откроет бота
+                // ВАЖНО: В MiniApp сразу закрываем без сообщений
                 if (isTelegramWebview) {
-                    showNotification('Заказ готов! Закрываю MiniApp...', 'success');
-                    
-                    // Показываем сообщение и закрываем через 1.5 секунды
-                    setTimeout(() => {
-                        // Закрываем MiniApp
-                        window.Telegram.WebApp.close();
-                    }, 1500);
-                    
+                    // Полностью закрываем MiniApp
+                    window.Telegram.WebApp.close();
                 } else {
                     // В обычном браузере открываем Telegram
+                    const param = `order_${data.order_id}_${data.token}`;
+                    const url = `https://t.me/flexyframe_bot?start=${param}`;
+                    
+                    hideLoading();
                     showNotification('Заказ создан! Открываю Telegram...', 'success');
                     window.open(url, '_blank');
                     
@@ -835,19 +830,15 @@ async function openTelegramBot() {
             }
         } else {
             // Fallback: старый метод
-            const param = `order_${selectedPainting.id}`;
-            const url = `https://t.me/flexyframe_bot?start=${param}`;
-            
-            hideLoading();
-            
-            // ВАЖНО: В MiniApp просто закрываем окно
             if (isTelegramWebview) {
-                showNotification('Заказ готов! Закрываю MiniApp...', 'success');
-                
-                setTimeout(() => {
-                    window.Telegram.WebApp.close();
-                }, 1500);
+                // В MiniApp просто закрываем
+                window.Telegram.WebApp.close();
             } else {
+                // В обычном браузере открываем Telegram
+                const param = `order_${selectedPainting.id}`;
+                const url = `https://t.me/flexyframe_bot?start=${param}`;
+                
+                hideLoading();
                 showNotification('Открываю Telegram...', 'success');
                 window.open(url, '_blank');
             }
@@ -861,19 +852,20 @@ async function openTelegramBot() {
         selectedPainting = null;
         
     } catch (error) {
-        hideLoading();
-        handleError(error, 'Ошибка при создании заказа');
-        
-        // В MiniApp не предлагаем ручной переход
-        const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
-        
+        // В MiniApp не показываем ошибки
         if (!isTelegramWebview) {
+            hideLoading();
+            handleError(error, 'Ошибка при создании заказа');
+            
             setTimeout(() => {
                 if (confirm('Не удалось создать заказ автоматически. Перейти в Telegram вручную?')) {
                     const url = `https://t.me/flexyframe_bot`;
                     window.open(url, '_blank');
                 }
             }, 1000);
+        } else {
+            // В MiniApp просто закрываем при ошибке
+            window.Telegram.WebApp.close();
         }
     }
 }

@@ -1040,34 +1040,39 @@ footer {
 /* Адаптив модального окна подтверждения для мобильных */
 @media (max-width: 768px) {
     .modal-content {
-        padding: 25px 20px;
+        padding: 30px 25px;
         width: 95%;
         max-width: none;
+        margin-bottom: 40px; /* Больше отступ снизу */
     }
     
     .modal-content .modal-title {
         font-size: 20px;
-        margin-bottom: 12px;
+        margin-bottom: 15px;
+        line-height: 1.3;
     }
     
     .modal-content .modal-text {
         font-size: 15px;
-        margin-bottom: 20px;
+        margin-bottom: 25px; /* Увеличенный отступ */
         line-height: 1.4;
+        padding: 0 5px;
     }
     
     .modal-content .modal-actions {
         flex-direction: column;
-        gap: 12px;
+        gap: 15px; /* Увеличенный gap */
         width: 100%;
+        margin-bottom: 10px; /* Дополнительный отступ снизу */
     }
     
     .modal-content .modal-actions .btn-primary,
     .modal-content .modal-actions .btn-secondary {
         width: 100%;
-        padding: 16px 20px;
+        padding: 18px 22px; /* Увеличенные отступы */
         font-size: 16px;
-        min-height: 50px;
+        min-height: 52px;
+        margin-bottom: 5px; /* Отступ между кнопками */
     }
 }
 
