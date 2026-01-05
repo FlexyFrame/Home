@@ -152,8 +152,30 @@ bot.onText(/\/start/, (msg) => {
 
 // === ОБРАБОТКА ПАРАМЕТРА ЗАПУСКА ===
 function handleStartParameter(chatId, param) {
-    // Форматы: "order_1", "order_1_token", "1_5000"
+    // Форматы: "order_1", "order_1_token", "1_5000", или JSON от MiniApp
     
+    // Проверяем, не JSON ли это (от MiniApp)
+    if (param.startsWith('{') && param.endsWith('}')) {
+        try {
+            const data = JSON.parse(param);
+            if (data.action === 'create_order' && data.painting) {
+                // Создаем заказ из данных MiniApp
+                const painting = data.painting;
+                const paintingData = findPaintingById(painting.id) || {
+                    id: painting.id,
+                    title: painting.title,
+                    category: painting.category,
+                    price: painting.price
+                };
+                createOrder(chatId, paintingData, null);
+                return;
+            }
+        } catch (e) {
+            console.error('Ошибка парсинга JSON:', e);
+        }
+    }
+    
+    // Обычная обработка параметров
     let paintingId;
     let token = null;
     
@@ -323,6 +345,28 @@ bot.on('message', (msg) => {
     
     const chatId = msg.chat.id;
     const text = msg.text;
+    
+    // Проверяем данные от MiniApp (web_app_data)
+    if (msg.web_app_data && msg.web_app_data.data) {
+        try {
+            const data = JSON.parse(msg.web_app_data.data);
+            console.log('📱 Данные от MiniApp:', data);
+            
+            if (data.action === 'create_order' && data.painting) {
+                const painting = data.painting;
+                const paintingData = findPaintingById(painting.id) || {
+                    id: painting.id,
+                    title: painting.title,
+                    category: painting.category,
+                    price: painting.price
+                };
+                createOrder(chatId, paintingData, null);
+                return;
+            }
+        } catch (e) {
+            console.error('Ошибка парсинга данных MiniApp:', e);
+        }
+    }
     
     // Проверяем состояние пользователя
     const session = getUserState(chatId);

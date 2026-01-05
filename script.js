@@ -730,18 +730,88 @@ async function proceedToOrder() {
     }
     
     // Показываем индикатор загрузки
-    showLoading('Подготовка заказа...');
+    showLoading('Создание заказа...');
     
-    // Небольшая задержка для UX
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    hideLoading();
-    
-    // Закрываем модальное окно подтверждения если открыто
-    closeConfirmModal();
-    
-    // Сразу открываем Telegram с информацией о заказе
-    await openTelegramBotWithOrder();
+    try {
+        // Проверяем, находимся ли мы в Telegram MiniApp
+        const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
+        
+        if (isTelegramWebview) {
+            console.log('📱 Режим MiniApp: отправляем данные через sendData()');
+            
+            // В режиме MiniApp отправляем данные напрямую
+            const orderData = {
+                action: 'create_order',
+                painting: {
+                    id: selectedPainting.id,
+                    title: selectedPainting.title,
+                    category: selectedPainting.category,
+                    price: selectedPainting.price
+                },
+                timestamp: Date.now()
+            };
+            
+            // Отправляем данные боту
+            window.Telegram.WebApp.sendData(JSON.stringify(orderData));
+            
+            // Закрываем MiniApp
+            setTimeout(() => {
+                window.Telegram.WebApp.close();
+            }, 500);
+            
+        } else {
+            console.log('🌐 Обычный режим: открываем Telegram с deep link');
+            
+            // В обычном режиме создаем заказ через API и открываем Telegram
+            const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.createOrder}`;
+            
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        user_id: 12345,
+                        painting_id: selectedPainting.id,
+                        painting_title: selectedPainting.title,
+                        price: parseInt(selectedPainting.price.replace('₽', ''))
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Открываем Telegram с deep link
+                    const param = `order_${result.order_id}_${result.token}`;
+                    const url = `https://t.me/flexyframe_bot?start=${param}`;
+                    
+                    showNotification('Открываю Telegram...', 'success');
+                    window.open(url, '_blank');
+                } else {
+                    throw new Error(result.error || 'Не удалось создать заказ');
+                }
+            } catch (error) {
+                console.error('Ошибка создания заказа:', error);
+                // Fallback: просто открываем бота
+                const url = `https://t.me/flexyframe_bot`;
+                window.open(url, '_blank');
+            }
+        }
+        
+    } catch (error) {
+        console.error('Ошибка в proceedToOrder:', error);
+        handleError(error, 'Ошибка при создании заказа');
+    } finally {
+        hideLoading();
+        
+        // Сбрасываем выбор
+        if (selectedPainting) {
+            const card = document.getElementById(`card-${selectedPainting.id}`);
+            if (card) card.classList.remove('selected');
+        }
+        selectedPainting = null;
+    }
 }
 
 function closeConfirmModal() {
