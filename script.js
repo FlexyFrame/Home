@@ -4,110 +4,92 @@ let apiAvailable = false;
 
 // Загрузка данных с сервера
 async function loadPaintingsData() {
-    try {
-        const response = await fetch('/api/paintings');
-        if (response.ok) {
-            const data = await response.json();
-            paintings = data.map(p => ({
-                id: p.id,
-                title: p.title,
-                category: p.category,
-                price: `${p.price}₽`,
-                image: `${p.category}/${p.file}`,
-                badge: p.badge
-            }));
-            apiAvailable = true;
-            console.log('✅ Данные загружены с сервера');
-        } else {
-            throw new Error('API not available');
+    // Всегда используем локальные данные для статической сборки
+    console.log('⚠️ Используем локальные данные (статический режим)');
+    paintings = [
+        {
+            id: 1,
+            title: "Аркейн Триумвират",
+            category: "Аркейн",
+            price: "4200₽",
+            image: "Аркейн/Аркейн Триумвират Заводского Города.jpg",
+            badge: "Хит"
+        },
+        {
+            id: 2,
+            title: "Глитч-Давид",
+            category: "Давид",
+            price: "4200₽",
+            image: "Давид/Глитч-Давид Рождение в цифровом хаосе.jpg",
+            badge: "Новинка"
+        },
+        {
+            id: 3,
+            title: "Цифровая Древность",
+            category: "Давид",
+            price: "4200₽",
+            image: "Давид/Цифровая Древность Голубой Давид.jpg"
+        },
+        {
+            id: 4,
+            title: "Железный Человек",
+            category: "Железный Человек",
+            price: "4200₽",
+            image: "Железный Человек/Железный Человек Перерыв на обед.jpg"
+        },
+        {
+            id: 5,
+            title: "Мысли в облаках",
+            category: "Земфира",
+            price: "4200₽",
+            image: "Земфира/Мысли в облаках.jpg"
+        },
+        {
+            id: 6,
+            title: "КэнтоНанами",
+            category: "Магическая битва",
+            price: "4200₽",
+            image: "Магическая битва/КэнтоНанами.png",
+            badge: "Хит"
+        },
+        {
+            id: 7,
+            title: "Скрудж Макдак",
+            category: "Скрудж",
+            price: "4200₽",
+            image: "Скрудж/Скрудж Макдак Граффити-Миллиардер.jpg"
+        },
+        {
+            id: 8,
+            title: "Танос Император",
+            category: "Танос",
+            price: "4200₽",
+            image: "Танос/Танос Император Бесконечности.jpg"
+        },
+        {
+            id: 9,
+            title: "Геймерский Энерджи",
+            category: "Live",
+            price: "4200₽",
+            image: "Live/Геймерский Энерджи Граффити на контроллере.jpg",
+            badge: "Хит"
+        },
+        {
+            id: 10,
+            title: "Ночной Волк",
+            category: "Live",
+            price: "4200₽",
+            image: "Live/Ночной Волк Мастер звуков.jpg"
+        },
+        {
+            id: 11,
+            title: "Примат Премиум",
+            category: "Live",
+            price: "4200₽",
+            image: "Live/Примат Премиум Король улицы.jpg"
         }
-    } catch (error) {
-        console.warn('⚠️ API недоступен, используем локальные данные');
-        // Fallback на локальные данные
-        paintings = [
-            {
-                id: 1,
-                title: "Аркейн Триумвират",
-                category: "Аркейн",
-                price: "4200₽",
-                image: "Аркейн/Аркейн Триумвират Заводского Города.jpg",
-                badge: "Хит"
-            },
-            {
-                id: 2,
-                title: "Глитч-Давид",
-                category: "Давид",
-                price: "4200₽",
-                image: "Давид/Глитч-Давид Рождение в цифровом хаосе.jpg",
-                badge: "Новинка"
-            },
-            {
-                id: 3,
-                title: "Цифровая Древность",
-                category: "Давид",
-                price: "4200₽",
-                image: "Давид/Цифровая Древность Голубой Давид.jpg"
-            },
-            {
-                id: 4,
-                title: "Железный Человек",
-                category: "Железный Человек",
-                price: "4200₽",
-                image: "Железный Человек/Железный Человек Перерыв на обед.jpg"
-            },
-            {
-                id: 5,
-                title: "Мысли в облаках",
-                category: "Земфира",
-                price: "4200₽",
-                image: "Земфира/Мысли в облаках.jpg"
-            },
-            {
-                id: 6,
-                title: "КэнтоНанами",
-                category: "Магическая битва",
-                price: "4200₽",
-                image: "Магическая битва/КэнтоНанами.png",
-                badge: "Хит"
-            },
-            {
-                id: 7,
-                title: "Скрудж Макдак",
-                category: "Скрудж",
-                price: "4200₽",
-                image: "Скрудж/Скрудж Макдак Граффити-Миллиардер.jpg"
-            },
-            {
-                id: 8,
-                title: "Танос Император",
-                category: "Танос",
-                price: "4200₽",
-                image: "Танос/Танос Император Бесконечности.jpg"
-            },
-            {
-                id: 9,
-                title: "Геймерский Энерджи",
-                category: "Live",
-                price: "4200₽",
-                image: "Live/Геймерский Энерджи Граффити на контроллере.jpg",
-                badge: "Хит"
-            },
-            {
-                id: 10,
-                title: "Ночной Волк",
-                category: "Live",
-                price: "4200₽",
-                image: "Live/Ночной Волк Мастер звуков.jpg"
-            },
-            {
-                id: 11,
-                title: "Примат Премиум",
-                category: "Live",
-                price: "4200₽",
-                image: "Live/Примат Премиум Король улицы.jpg"
-            }
-        ];
-    }
+    ];
+    apiAvailable = false;
 }
 
 let selectedPainting = null;
@@ -767,7 +749,7 @@ function closeConfirmModal() {
     modal.removeAttribute('role');
 }
 
-// === TELEGRAM БОТ (ОПТИМИЗИРОВАННАЯ ЛОГИКА ДЛЯ MINIAPP) ===
+// === TELEGRAM БОТ (СТАТИЧЕСКИЙ РЕЖИМ) ===
 async function openTelegramBot() {
     console.log('🎯 openTelegramBot() вызвана');
     
@@ -789,73 +771,22 @@ async function openTelegramBot() {
             showLoading('Подготовка заказа...');
         }
         
-        if (apiAvailable) {
-            // Используем API для создания заказа
-            const userId = localStorage.getItem('user_id') || `user_${Date.now()}`;
-            localStorage.setItem('user_id', userId);
-            
-            console.log('📤 Отправка запроса на создание заказа...');
-            
-            const response = await fetch('/api/order/create', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    user_id: parseInt(userId.replace('user_', '')) || Math.floor(Math.random() * 100000),
-                    painting_id: selectedPainting.id,
-                    painting_title: selectedPainting.title,
-                    price: parseInt(selectedPainting.price)
-                })
-            });
-            
-            console.log('📥 Ответ от API:', response.status);
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('✅ Заказ создан:', data);
-                
-                // ВАЖНО: В MiniApp сразу закрываем без сообщений
-                if (isTelegramWebview) {
-                    console.log('🔒 Закрываем MiniApp...');
-                    // Полностью закрываем MiniApp
-                    window.Telegram.WebApp.close();
-                    console.log('✅ MiniApp закрыта');
-                } else {
-                    // В обычном браузере открываем Telegram
-                    const param = `order_${data.order_id}_${data.token}`;
-                    const url = `https://t.me/flexyframe_bot?start=${param}`;
-                    
-                    hideLoading();
-                    showNotification('Заказ создан! Открываю Telegram...', 'success');
-                    window.open(url, '_blank');
-                    
-                    // Показываем инструкции
-                    setTimeout(() => {
-                        showNotification(`Заказ #${data.order_id} готов к оплате`, 'success', 5000);
-                    }, 1000);
-                }
-                
-            } else {
-                throw new Error('API error');
-            }
+        // В статическом режиме всегда используем fallback
+        console.log('⚠️ Статический режим: используем прямую ссылку');
+        
+        if (isTelegramWebview) {
+            console.log('🔒 Закрываем MiniApp...');
+            // В MiniApp просто закрываем
+            window.Telegram.WebApp.close();
+            console.log('✅ MiniApp закрыта');
         } else {
-            // Fallback: старый метод
-            console.log('⚠️ Используем fallback метод');
-            if (isTelegramWebview) {
-                console.log('🔒 Закрываем MiniApp (fallback)...');
-                // В MiniApp просто закрываем
-                window.Telegram.WebApp.close();
-                console.log('✅ MiniApp закрыта (fallback)');
-            } else {
-                // В обычном браузере открываем Telegram
-                const param = `order_${selectedPainting.id}`;
-                const url = `https://t.me/flexyframe_bot?start=${param}`;
-                
-                hideLoading();
-                showNotification('Открываю Telegram...', 'success');
-                window.open(url, '_blank');
-            }
+            // В обычном браузере открываем Telegram с информацией о заказе
+            const message = `Здравствуйте! Хочу заказать картину "${selectedPainting.title}" (${selectedPainting.category}) - ${selectedPainting.price}`;
+            const url = `https://t.me/flexyframe_bot?text=${encodeURIComponent(message)}`;
+            
+            hideLoading();
+            showNotification('Открываю Telegram...', 'success');
+            window.open(url, '_blank');
         }
         
         // Сбрасываем выбор
@@ -874,8 +805,9 @@ async function openTelegramBot() {
             handleError(error, 'Ошибка при создании заказа');
             
             setTimeout(() => {
-                if (confirm('Не удалось создать заказ автоматически. Перейти в Telegram вручную?')) {
-                    const url = `https://t.me/flexyframe_bot`;
+                if (confirm('Не удалось открыть Telegram. Попробовать снова?')) {
+                    const message = `Здравствуйте! Хочу заказать картину "${selectedPainting.title}"`;
+                    const url = `https://t.me/flexyframe_bot?text=${encodeURIComponent(message)}`;
                     window.open(url, '_blank');
                 }
             }, 1000);
