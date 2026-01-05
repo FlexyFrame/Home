@@ -699,41 +699,63 @@ function galleryKeyHandler(e) {
 // Функция updateFullscreenGallery удалена
 
 // === ПЕРЕХОД К ЗАКАЗУ ===
-function proceedToOrder() {
+async function proceedToOrder() {
     if (!selectedPainting) {
         showNotification('Сначала выберите картину', 'error');
         return;
     }
 
-    // Закрываем модальное окно просмотра (но НЕ сбрасываем selectedPainting)
+    // Закрываем модальное окно просмотра
     const modal = document.getElementById('viewModal');
     if (modal && modal.classList.contains('visible')) {
         modal.classList.remove('visible');
         document.body.style.overflow = 'auto';
-        
-        // Удаляем ARIA атрибуты
         modal.removeAttribute('aria-modal');
         modal.removeAttribute('role');
         modal.removeAttribute('aria-labelledby');
-        
         isModalOpen = false;
     }
     
-    // Показываем модальное окно подтверждения
-    const confirmModal = document.getElementById('confirmModal');
-    if (confirmModal) {
-        confirmModal.classList.add('visible');
-        document.body.style.overflow = 'hidden';
+    // Показываем индикатор загрузки
+    showLoading('Создание заказа...');
+    
+    try {
+        // Создаем заказ через API
+        const response = await fetch('/api/order/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: 12345, // Временный ID
+                painting_id: selectedPainting.id,
+                painting_title: selectedPainting.title,
+                price: parseInt(selectedPainting.price.replace('₽', ''))
+            })
+        });
         
-        // Управление фокусом
-        setTimeout(() => {
-            const confirmBtn = confirmModal.querySelector('.btn-primary');
-            if (confirmBtn) confirmBtn.focus();
-        }, 100);
+        const result = await response.json();
         
-        // ARIA атрибуты
-        confirmModal.setAttribute('aria-modal', 'true');
-        confirmModal.setAttribute('role', 'dialog');
+        if (result.success) {
+            // Сохраняем токен заказа
+            selectedPainting.orderToken = result.token;
+            selectedPainting.orderId = result.order_id;
+            
+            hideLoading();
+            
+            // Закрываем модальное окно подтверждения если открыто
+            closeConfirmModal();
+            
+            // Открываем Telegram с deep link
+            await openTelegramBotWithOrder();
+            
+        } else {
+            throw new Error(result.error || 'Не удалось создать заказ');
+        }
+        
+    } catch (error) {
+        hideLoading();
+        handleError(error, 'Ошибка при создании заказа');
     }
 }
 
@@ -743,10 +765,55 @@ function closeConfirmModal() {
     
     modal.classList.remove('visible');
     document.body.style.overflow = 'auto';
-    
-    // Удаляем ARIA атрибуты
     modal.removeAttribute('aria-modal');
     modal.removeAttribute('role');
+}
+
+// === TELEGRAM БОТ С ЗАКАЗОМ ===
+async function openTelegramBotWithOrder() {
+    console.log('🎯 openTelegramBotWithOrder() вызвана');
+    
+    if (!selectedPainting || !selectedPainting.orderToken) {
+        showNotification('Ошибка: заказ не создан', 'error');
+        return;
+    }
+
+    // Проверяем, находимся ли мы в Telegram MiniApp
+    const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
+    console.log('📱 Telegram WebApp:', isTelegramWebview);
+    console.log('🎨 Выбранная картина:', selectedPainting);
+    console.log('🔑 Токен заказа:', selectedPainting.orderToken);
+    
+    try {
+        if (isTelegramWebview) {
+            console.log('🔒 Закрываем MiniApp...');
+            window.Telegram.WebApp.close();
+            console.log('✅ MiniApp закрыта');
+        } else {
+            // Формируем deep link с токеном заказа
+            const param = `order_${selectedPainting.orderId}_${selectedPainting.orderToken}`;
+            const url = `https://t.me/flexyframe_bot?start=${param}`;
+            
+            showNotification('Открываю Telegram с заказом...', 'success');
+            window.open(url, '_blank');
+        }
+        
+        // Сбрасываем выбор
+        if (selectedPainting) {
+            const card = document.getElementById(`card-${selectedPainting.id}`);
+            if (card) card.classList.remove('selected');
+        }
+        selectedPainting = null;
+        
+    } catch (error) {
+        console.error('❌ Ошибка в openTelegramBotWithOrder():', error);
+        
+        if (!isTelegramWebview) {
+            handleError(error, 'Ошибка при открытии Telegram');
+        } else {
+            window.Telegram.WebApp.close();
+        }
+    }
 }
 
 // === TELEGRAM БОТ (СТАТИЧЕСКИЙ РЕЖИМ) ===
