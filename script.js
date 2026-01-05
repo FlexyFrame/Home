@@ -730,49 +730,18 @@ async function proceedToOrder() {
     }
     
     // Показываем индикатор загрузки
-    showLoading('Создание заказа...');
+    showLoading('Подготовка заказа...');
     
-    try {
-        // Создаем заказ через API
-        const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.createOrder}`;
-        console.log('📡 Отправка запроса на:', apiUrl);
-        
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                user_id: 12345, // Временный ID
-                painting_id: selectedPainting.id,
-                painting_title: selectedPainting.title,
-                price: parseInt(selectedPainting.price.replace('₽', ''))
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Сохраняем токен заказа
-            selectedPainting.orderToken = result.token;
-            selectedPainting.orderId = result.order_id;
-            
-            hideLoading();
-            
-            // Закрываем модальное окно подтверждения если открыто
-            closeConfirmModal();
-            
-            // Открываем Telegram с deep link
-            await openTelegramBotWithOrder();
-            
-        } else {
-            throw new Error(result.error || 'Не удалось создать заказ');
-        }
-        
-    } catch (error) {
-        hideLoading();
-        handleError(error, 'Ошибка при создании заказа');
-    }
+    // Небольшая задержка для UX
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    hideLoading();
+    
+    // Закрываем модальное окно подтверждения если открыто
+    closeConfirmModal();
+    
+    // Сразу открываем Telegram с информацией о заказе
+    await openTelegramBotWithOrder();
 }
 
 function closeConfirmModal() {
@@ -789,8 +758,8 @@ function closeConfirmModal() {
 async function openTelegramBotWithOrder() {
     console.log('🎯 openTelegramBotWithOrder() вызвана');
     
-    if (!selectedPainting || !selectedPainting.orderToken) {
-        showNotification('Ошибка: заказ не создан', 'error');
+    if (!selectedPainting) {
+        showNotification('Ошибка: картина не выбрана', 'error');
         return;
     }
 
@@ -798,7 +767,6 @@ async function openTelegramBotWithOrder() {
     const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
     console.log('📱 Telegram WebApp:', isTelegramWebview);
     console.log('🎨 Выбранная картина:', selectedPainting);
-    console.log('🔑 Токен заказа:', selectedPainting.orderToken);
     
     try {
         if (isTelegramWebview) {
@@ -806,9 +774,16 @@ async function openTelegramBotWithOrder() {
             window.Telegram.WebApp.close();
             console.log('✅ MiniApp закрыта');
         } else {
-            // Формируем deep link с токеном заказа
-            const param = `order_${selectedPainting.orderId}_${selectedPainting.orderToken}`;
-            const url = `https://t.me/flexyframe_bot?start=${param}`;
+            // Формируем сообщение с информацией о заказе
+            const message = `Здравствуйте! Хочу заказать картину:
+            
+🎨 "${selectedPainting.title}"
+📁 Категория: ${selectedPainting.category}
+💰 Цена: ${selectedPainting.price}
+
+Пожалуйста, помогите оформить заказ!`;
+            
+            const url = `https://t.me/flexyframe_bot?text=${encodeURIComponent(message)}`;
             
             showNotification('Открываю Telegram с заказом...', 'success');
             window.open(url, '_blank');
