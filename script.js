@@ -3,7 +3,7 @@ const API_CONFIG = {
     // Определяем базовый URL API
     baseUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
         ? 'http://127.0.0.1:8080' 
-        : 'https://flexyframe-api.onrender.com', // Или ваш реальный API сервер
+        : 'http://127.0.0.1:8080', // Для GitHub Pages используем локальный сервер
     endpoints: {
         createOrder: '/api/order/create',
         paintings: '/api/paintings',
