@@ -1,3 +1,16 @@
+// === КОНФИГУРАЦИЯ API ===
+const API_CONFIG = {
+    // Определяем базовый URL API
+    baseUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+        ? 'http://127.0.0.1:8080' 
+        : 'https://flexyframe-api.onrender.com', // Или ваш реальный API сервер
+    endpoints: {
+        createOrder: '/api/order/create',
+        paintings: '/api/paintings',
+        orderStatus: '/api/order'
+    }
+};
+
 // === ДАННЫЕ КАРТИН ===
 let paintings = [];
 let apiAvailable = false;
@@ -721,7 +734,10 @@ async function proceedToOrder() {
     
     try {
         // Создаем заказ через API
-        const response = await fetch('/api/order/create', {
+        const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.createOrder}`;
+        console.log('📡 Отправка запроса на:', apiUrl);
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
