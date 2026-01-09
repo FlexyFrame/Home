@@ -337,21 +337,41 @@ function showOrderInfo(chatId, order, painting) {
 
 // === УВЕДОМЛЕНИЕ АДМИНИСТРАТОРА ===
 function notifyAdmin(orderId, chatId, painting, token) {
-    if (!ADMIN_CHAT_ID || ADMIN_CHAT_ID === 'your_admin_id') {
-        console.log('ℹ️ Администратор не указан, уведомление не отправлено');
+    const adminToken = process.env.ADMIN_BOT_TOKEN;
+    const adminChatId = process.env.ADMIN_CHAT_ID;
+    
+    if (!adminToken || !adminChatId || adminChatId === 'your_admin_id') {
+        console.log('ℹ️ Админ-бот не настроен, уведомление не отправлено');
         return;
     }
     
-    const message = 
-        `🔔 <b>Новый заказ #${orderId}</b>\n\n` +
-        `👤 Пользователь: ${chatId}\n` +
-        `🎨 Картина: ${painting.title}\n` +
-        `💰 Сумма: ${painting.price}₽\n` +
-        `📊 Статус: Ожидает оплаты\n` +
-        `🔑 Токен: ${token}`;
-    
-    bot.sendMessage(ADMIN_CHAT_ID, message, { parse_mode: 'HTML' })
-        .catch(err => console.log('⚠️ Не удалось отправить уведомление:', err.message));
+    // Получаем информацию о пользователе из БД
+    db.get(`SELECT username, first_name FROM users WHERE user_id = ?`, [chatId], (err, user) => {
+        if (err) {
+            console.log('⚠️ Ошибка получения данных пользователя:', err.message);
+            return;
+        }
+        
+        const userName = user ? 
+            (user.first_name || user.username || 'Пользователь') : 
+            `ID: ${chatId}`;
+        
+        const message = 
+            `🔔 <b>Новый заказ #${orderId}</b>\n\n` +
+            `👤 Пользователь: ${userName}\n` +
+            `🆔 ID: ${chatId}\n` +
+            `🎨 Картина: ${painting.title}\n` +
+            `💰 Сумма: ${painting.price}₽\n` +
+            `📊 Статус: Ожидает оплаты\n` +
+            `🔑 Токен: ${token}`;
+        
+        // Создаем отдельного бота для админ-чата
+        const adminBot = new TelegramBot(adminToken, { polling: false });
+        
+        adminBot.sendMessage(adminChatId, message, { parse_mode: 'HTML' })
+            .then(() => console.log('✅ Уведомление администратору отправлено'))
+            .catch(err => console.log('⚠️ Ошибка отправки админ-уведомления:', err.message));
+    });
 }
 
 // === ГЕНЕРАЦИЯ ССЫЛКИ НА ОПЛАТУ ===
@@ -813,18 +833,41 @@ bot.on('callback_query', (callbackQuery) => {
 
 // === УВЕДОМЛЕНИЕ ОБ ОПЛАТЕ ===
 function notifyAdminPayment(orderId, chatId, order) {
-    if (!ADMIN_CHAT_ID || ADMIN_CHAT_ID === 'your_admin_id') return;
+    const adminToken = process.env.ADMIN_BOT_TOKEN;
+    const adminChatId = process.env.ADMIN_CHAT_ID;
     
-    const message = 
-        `💰 <b>Оплата подтверждена!</b>\n\n` +
-        `Заказ #${orderId}\n` +
-        `👤 Пользователь: ${chatId}\n` +
-        `🎨 ${order.painting_title}\n` +
-        `💰 ${order.price}₽\n` +
-        `📊 Статус: Оплачен`;
+    if (!adminToken || !adminChatId || adminChatId === 'your_admin_id') {
+        console.log('ℹ️ Админ-бот не настроен, уведомление об оплате не отправлено');
+        return;
+    }
     
-    bot.sendMessage(ADMIN_CHAT_ID, message, { parse_mode: 'HTML' })
-        .catch(() => {});
+    // Получаем информацию о пользователе из БД
+    db.get(`SELECT username, first_name FROM users WHERE user_id = ?`, [chatId], (err, user) => {
+        if (err) {
+            console.log('⚠️ Ошибка получения данных пользователя:', err.message);
+            return;
+        }
+        
+        const userName = user ? 
+            (user.first_name || user.username || 'Пользователь') : 
+            `ID: ${chatId}`;
+        
+        const message = 
+            `💰 <b>Оплата подтверждена!</b>\n\n` +
+            `Заказ #${orderId}\n` +
+            `👤 Пользователь: ${userName}\n` +
+            `🆔 ID: ${chatId}\n` +
+            `🎨 ${order.painting_title}\n` +
+            `💰 ${order.price}₽\n` +
+            `📊 Статус: Оплачен`;
+        
+        // Создаем отдельного бота для админ-чата
+        const adminBot = new TelegramBot(adminToken, { polling: false });
+        
+        adminBot.sendMessage(adminChatId, message, { parse_mode: 'HTML' })
+            .then(() => console.log('✅ Уведомление об оплате администратору отправлено'))
+            .catch(err => console.log('⚠️ Ошибка отправки уведомления об оплате:', err.message));
+    });
 }
 
 // === API ENDPOINTS ===

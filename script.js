@@ -924,6 +924,104 @@ function setupErrorHandling() {
     });
 }
 
+// === СКРЫТИЕ ХЕДЕРА ПРИ ПРОКРУТКЕ ===
+function setupHeaderScroll() {
+    let lastScroll = 0;
+    const header = document.querySelector('header');
+    const logo = document.querySelector('.logo-image');
+    const nav = document.querySelector('nav');
+    
+    if (!header || !logo) {
+        console.log('❌ Header elements not found');
+        return;
+    }
+    
+    console.log('✅ Header scroll initialized', { header, logo, nav });
+    
+    // Проверяем, мобильная ли версия
+    const isMobile = () => window.innerWidth <= 768;
+    
+    // Обработчик прокрутки
+    const handleScroll = () => {
+        const currentScroll = window.scrollY;
+        const isMobileView = isMobile();
+        
+        console.log('Scroll:', currentScroll, 'Mobile:', isMobileView);
+        
+        if (isMobileView) {
+            // На мобильных: скрываем логотип и навигацию при прокрутке вниз
+            if (currentScroll > lastScroll && currentScroll > 100) {
+                // Прокрутка вниз - скрываем
+                if (logo) {
+                    logo.style.opacity = '0';
+                    logo.style.transform = 'translateY(-20px)';
+                    console.log('📱 Скрываем логотип');
+                }
+                if (nav) {
+                    nav.style.opacity = '0';
+                    nav.style.transform = 'translateY(-20px)';
+                    console.log('📱 Скрываем навигацию');
+                }
+            } else if (currentScroll < lastScroll || currentScroll < 100) {
+                // Прокрутка вверх или вверху - показываем
+                if (logo) {
+                    logo.style.opacity = '1';
+                    logo.style.transform = 'translateY(0)';
+                    console.log('📱 Показываем логотип');
+                }
+                if (nav) {
+                    nav.style.opacity = '1';
+                    nav.style.transform = 'translateY(0)';
+                    console.log('📱 Показываем навигацию');
+                }
+            }
+        } else {
+            // На десктопе: скрываем весь header при прокрутке вниз
+            if (currentScroll > lastScroll && currentScroll > 100) {
+                header.classList.add('hidden');
+                console.log('🖥️ Скрываем header');
+            } else if (currentScroll < lastScroll || currentScroll < 100) {
+                header.classList.remove('hidden');
+                console.log('🖥️ Показываем header');
+            }
+        }
+        
+        lastScroll = currentScroll;
+    };
+    
+    // Добавляем стили для плавных переходов
+    if (logo) {
+        logo.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        logo.style.willChange = 'opacity, transform';
+    }
+    
+    if (nav) {
+        nav.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        nav.style.willChange = 'opacity, transform';
+    }
+    
+    // Подписываемся на событие прокрутки
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Обработчик изменения размера окна
+    window.addEventListener('resize', () => {
+        console.log('Resize:', window.innerWidth);
+        // Сбрасываем стили при изменении размера
+        if (!isMobile()) {
+            if (logo) {
+                logo.style.opacity = '1';
+                logo.style.transform = '';
+            }
+            if (nav) {
+                nav.style.opacity = '1';
+                nav.style.transform = '';
+            }
+        }
+    });
+    
+    console.log('✅ Header scroll setup complete');
+}
+
 // === ИНИЦИАЛИЗАЦИЯ ===
 document.addEventListener('DOMContentLoaded', async () => {
     try {
@@ -942,6 +1040,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Настраиваем обработку ошибок
         setupErrorHandling();
+        
+        // Настраиваем скрытие хедера при прокрутке
+        setupHeaderScroll();
         
         // Настраиваем плавную навигацию
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
