@@ -1,25 +1,134 @@
-// === КОНФИГУРАЦИЯ API ===
+/**
+ * FlexyFrame - Клиентский скрипт
+ * Оптимизированная версия с улучшенной обработкой ошибок и валидацией
+ */
+
+// === КОНФИГУРАЦИЯ ===
 const API_CONFIG = {
-    // Определяем базовый URL API
     baseUrl: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
         ? 'http://127.0.0.1:8080' 
-        : 'http://127.0.0.1:8080', // Для GitHub Pages используем локальный сервер
+        : 'https://flexyframe.github.io',
     endpoints: {
         createOrder: '/api/order/create',
         paintings: '/api/paintings',
         orderStatus: '/api/order'
+    },
+    timeout: 10000 // 10 секунд таймаут
+};
+
+// === СОСТОЯНИЕ ПРИЛОЖЕНИЯ ===
+const AppState = {
+    paintings: [],
+    selectedPainting: null,
+    isLoading: false,
+    apiAvailable: false,
+    observer: null,
+    sessionData: new Map()
+};
+
+// === УТИЛИТЫ ЛОГИРОВАНИЯ (минимизированные) ===
+const Logger = {
+    info: (...args) => {}, // Отключено в продакшене
+    warn: (message, data) => console.warn(`⚠️ ${message}`, data || ''),
+    error: (message, error) => console.error(`❌ ${message}`, error || '')
+};
+
+// === ВАЛИДАЦИЯ ДАННЫХ ===
+const Validators = {
+    painting: (painting) => {
+        return painting && 
+               typeof painting === 'object' &&
+               typeof painting.id === 'number' &&
+               typeof painting.title === 'string' &&
+               typeof painting.price === 'string' || typeof painting.price === 'number';
+    },
+    
+    string: (value, minLength = 1) => {
+        return typeof value === 'string' && value.trim().length >= minLength;
+    },
+    
+    number: (value, min = 0) => {
+        return typeof value === 'number' && value >= min;
     }
 };
 
-// === ДАННЫЕ КАРТИН ===
-let paintings = [];
-let apiAvailable = false;
+// === СИСТЕМА УВЕДОМЛЕНИЙ ===
+const Notifications = {
+    show(message, type = 'success', duration = 3000) {
+        // Пропускаем info уведомления для чистоты лога
+        if (type === 'info') return;
+        
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        notification.setAttribute('role', 'alert');
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => notification.classList.add('visible'), 10);
+        
+        setTimeout(() => {
+            notification.classList.remove('visible');
+            setTimeout(() => notification.remove(), 300);
+        }, duration);
+        
+        // Клик для ручного закрытия
+        notification.addEventListener('click', () => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 300);
+        });
+    },
+    
+    success(message) {
+        this.show(message, 'success', 3000);
+    },
+    
+    error(message) {
+        this.show(message, 'error', 5000);
+    },
+    
+    warn(message) {
+        this.show(message, 'warning', 4000);
+    }
+};
 
-// Загрузка данных с сервера
+// === ИНДИКАТОР ЗАГРУЗКИ ===
+const LoadingIndicator = {
+    element: null,
+    count: 0,
+    
+    show(message = 'Загрузка...') {
+        if (this.count === 0) {
+            this.element = document.createElement('div');
+            this.element.className = 'loading-indicator';
+            this.element.textContent = message;
+            this.element.setAttribute('role', 'status');
+            document.body.appendChild(this.element);
+            setTimeout(() => this.element.classList.add('visible'), 10);
+        }
+        this.count++;
+    },
+    
+    hide() {
+        this.count = Math.max(0, this.count - 1);
+        if (this.count === 0 && this.element) {
+            this.element.classList.remove('visible');
+            setTimeout(() => {
+                if (this.element && this.element.parentNode) {
+                    this.element.remove();
+                }
+                this.element = null;
+            }, 300);
+        }
+    }
+};
+
+// === ЗАГРУЗКА ДАННЫХ ===
 async function loadPaintingsData() {
+    Logger.info('Загрузка данных картин');
+    
     // Всегда используем локальные данные для статической сборки
-    console.log('⚠️ Используем локальные данные (статический режим)');
-    paintings = [
+    AppState.paintings = [
         {
             id: 1,
             title: "Аркейн Триумвират",
@@ -102,146 +211,38 @@ async function loadPaintingsData() {
             image: "Live/Примат Премиум Король улицы.jpg"
         }
     ];
-    apiAvailable = false;
+    
+    AppState.apiAvailable = false;
+    return AppState.paintings;
 }
 
-let selectedPainting = null;
-let isLoading = false;
-let observer = null;
+// === БЕЗОПАСНАЯ ЗАГРУЗКА ИЗОБРАЖЕНИЙ ===
+async function safeLoadImage(img, src, placeholderText = '') {
+    return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+            img.style.display = 'none';
+            const placeholder = img.parentElement.querySelector('.image-placeholder');
+            if (placeholder) placeholder.style.display = 'flex';
+            resolve(false);
+        }, 5000); // Таймаут 5 секунд
 
-// === УПРАВЛЕНИЕ УВЕДОМЛЕНИЯМИ (ТОЛЬКО ОШИБКИ И УСПЕХ) ===
-function showNotification(message, type = 'success', duration = 3000) {
-    // Пропускаем info уведомления
-    if (type === 'info') return;
-    
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    notification.setAttribute('role', 'alert');
-    notification.setAttribute('aria-live', 'polite');
-    
-    document.body.appendChild(notification);
-    
-    // Активация анимации
-    setTimeout(() => notification.classList.add('visible'), 10);
-    
-    // Автоматическое скрытие
-    const hideTimeout = setTimeout(() => {
-        notification.classList.remove('visible');
-        setTimeout(() => notification.remove(), 300);
-    }, duration);
-    
-    // Клик для ручного закрытия
-    notification.addEventListener('click', () => {
-        clearTimeout(hideTimeout);
-        notification.classList.remove('visible');
-        setTimeout(() => notification.remove(), 300);
+        img.onload = () => {
+            clearTimeout(timeout);
+            img.style.opacity = '1';
+            resolve(true);
+        };
+
+        img.onerror = () => {
+            clearTimeout(timeout);
+            img.style.display = 'none';
+            const placeholder = img.parentElement.querySelector('.image-placeholder');
+            if (placeholder) placeholder.style.display = 'flex';
+            Logger.warn('Ошибка загрузки изображения', src);
+            resolve(false);
+        };
+
+        img.src = src;
     });
-    
-    return notification;
-}
-
-// === ИНДИКАТОР ЗАГРУЗКИ ===
-function showLoading(message = 'Загрузка...') {
-    if (isLoading) return;
-    isLoading = true;
-    
-    const indicator = document.createElement('div');
-    indicator.className = 'loading-indicator';
-    indicator.textContent = message;
-    indicator.setAttribute('role', 'status');
-    indicator.setAttribute('aria-live', 'polite');
-    
-    document.body.appendChild(indicator);
-    
-    setTimeout(() => indicator.classList.add('visible'), 10);
-}
-
-function hideLoading() {
-    const indicator = document.querySelector('.loading-indicator');
-    if (indicator) {
-        indicator.classList.remove('visible');
-        setTimeout(() => indicator.remove(), 300);
-    }
-    isLoading = false;
-}
-
-// === ОБРАБОТКА ОШИБОК ===
-function handleError(error, userMessage = 'Произошла ошибка') {
-    console.error('Error:', error);
-    showNotification(userMessage, 'error', 5000);
-    hideLoading();
-}
-
-// === ПРОВЕРКА ДОСТУПНОСТИ ИЗОБРАЖЕНИЯ ===
-async function checkImageAvailability(src) {
-    try {
-        const response = await fetch(src, { method: 'HEAD', mode: 'no-cors' });
-        return true; // Если нет ошибки - изображение доступно
-    } catch (error) {
-        console.warn('Image not available:', src);
-        return false;
-    }
-}
-
-// === БЕЗОПАСНАЯ ЗАГРУЗКА ИЗОБРАЖЕНИЯ ===
-function safeLoadImage(img, src, placeholderText = '') {
-    // Проверяем доступность
-    checkImageAvailability(src).then(available => {
-        if (available) {
-            img.src = src;
-        } else {
-            // Используем плейсхолдер
-            const svgPlaceholder = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22250%22%3E%3Crect width=%22300%22 height=%22250%22 fill=%22%23f0f0f0%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2216%22%3E${encodeURIComponent(placeholderText)}%3C/text%3E%3C/svg%3E`;
-            img.src = svgPlaceholder;
-            img.style.objectFit = 'contain';
-            img.style.padding = '20px';
-            
-            // Показываем уведомление один раз
-            if (!sessionStorage.getItem('image_error_shown')) {
-                showNotification('Некоторые изображения недоступны', 'error', 3000);
-                sessionStorage.setItem('image_error_shown', 'true');
-            }
-        }
-    }).catch(() => {
-        // Fallback на случай ошибки сети
-        const svgPlaceholder = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22250%22%3E%3Crect width=%22300%22 height=%22250%22 fill=%22%23f0f0f0%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2216%22%3E${encodeURIComponent(placeholderText)}%3C/text%3E%3C/svg%3E`;
-        img.src = svgPlaceholder;
-        img.style.objectFit = 'contain';
-        img.style.padding = '20px';
-    });
-}
-
-// === ЗАГРУЗКА ГАЛЕРЕИ С ОПТИМИЗАЦИЕЙ ===
-function loadGallery() {
-    const grid = document.getElementById('galleryGrid');
-    if (!grid) return;
-
-    // Очищаем галерею
-    grid.innerHTML = '';
-    
-    // Создаем фрагмент для оптимизации
-    const fragment = document.createDocumentFragment();
-    
-    paintings.forEach((painting, index) => {
-        const card = createPaintCard(painting, index);
-        fragment.appendChild(card);
-    });
-    
-    grid.appendChild(fragment);
-    
-    // Настройка Intersection Observer для lazy loading
-    setupLazyLoading();
-    
-    // Анимация появления
-    setTimeout(() => {
-        const cards = grid.querySelectorAll('.paint-card');
-        cards.forEach((card, index) => {
-            setTimeout(() => {
-                card.style.opacity = '1';
-            }, index * 50); // Ускоренная анимация
-        });
-    }, 100);
 }
 
 // === СОЗДАНИЕ КАРТОЧКИ КАРТИНЫ ===
@@ -255,26 +256,54 @@ function createPaintCard(painting, index) {
     card.style.opacity = '0';
     
     // Обработчики событий
-    card.addEventListener('click', () => selectPainting(painting.id));
+    const handleClick = () => selectPainting(painting.id);
+    card.addEventListener('click', handleClick);
     card.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            selectPainting(painting.id);
+            handleClick();
         }
     });
     
     // Изображение с lazy loading
+    const imgWrapper = document.createElement('div');
+    imgWrapper.className = 'image-wrapper';
+    imgWrapper.style.position = 'relative';
+    imgWrapper.style.width = '100%';
+    imgWrapper.style.height = '250px';
+    imgWrapper.style.background = 'var(--light-gray)';
+    
     const img = document.createElement('img');
     img.setAttribute('data-src', painting.image);
     img.alt = painting.title;
     img.loading = 'lazy';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.opacity = '0';
+    img.style.transition = 'opacity 0.3s';
     
-    // Обработчик ошибки загрузки
-    img.addEventListener('error', function() {
-        this.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22250%22%3E%3Crect width=%22300%22 height=%22250%22 fill=%22%23f0f0f0%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2216%22%3E' + painting.title + '%3C/text%3E%3C/svg%3E';
-        this.style.objectFit = 'contain';
-        this.style.padding = '20px';
-    });
+    // Placeholder
+    const placeholder = document.createElement('div');
+    placeholder.className = 'image-placeholder';
+    placeholder.textContent = '🎨';
+    placeholder.style.cssText = `
+        display: none;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 48px;
+        opacity: 0.3;
+        width: 100%;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        background: var(--light-gray);
+    `;
+    
+    imgWrapper.appendChild(img);
+    imgWrapper.appendChild(placeholder);
     
     // Информация о картине
     const info = document.createElement('div');
@@ -304,7 +333,7 @@ function createPaintCard(painting, index) {
         card.appendChild(badge);
     }
     
-    card.appendChild(img);
+    card.appendChild(imgWrapper);
     card.appendChild(info);
     
     return card;
@@ -312,22 +341,20 @@ function createPaintCard(painting, index) {
 
 // === LAZY LOADING ДЛЯ ИЗОБРАЖЕНИЙ ===
 function setupLazyLoading() {
-    // Удаляем старый observer если есть
-    if (observer) {
-        observer.disconnect();
+    if (AppState.observer) {
+        AppState.observer.disconnect();
     }
-    
-    // Создаем новый Intersection Observer
-    observer = new IntersectionObserver((entries) => {
+
+    AppState.observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
                 const img = entry.target;
                 const src = img.getAttribute('data-src');
                 
                 if (src) {
-                    img.src = src;
+                    safeLoadImage(img, src, img.alt);
                     img.removeAttribute('data-src');
-                    observer.unobserve(img);
+                    AppState.observer.unobserve(img);
                 }
             }
         });
@@ -335,35 +362,88 @@ function setupLazyLoading() {
         rootMargin: '50px 0px',
         threshold: 0.01
     });
-    
-    // Наблюдаем за всеми изображениями
+
     document.querySelectorAll('img[data-src]').forEach(img => {
-        observer.observe(img);
+        AppState.observer.observe(img);
     });
+}
+
+// === ЗАГРУЗКА ГАЛЕРЕИ ===
+async function loadGallery() {
+    const grid = document.getElementById('galleryGrid');
+    if (!grid) return;
+
+    LoadingIndicator.show('Загрузка галереи...');
+    
+    try {
+        // Очищаем галерею
+        grid.innerHTML = '';
+        
+        // Загружаем данные
+        const paintings = await loadPaintingsData();
+        
+        // Создаем фрагмент для оптимизации
+        const fragment = document.createDocumentFragment();
+        
+        paintings.forEach((painting, index) => {
+            const card = createPaintCard(painting, index);
+            fragment.appendChild(card);
+        });
+        
+        grid.appendChild(fragment);
+        
+        // Настраиваем lazy loading
+        setupLazyLoading();
+        
+        // Анимация появления
+        setTimeout(() => {
+            const cards = grid.querySelectorAll('.paint-card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                }, index * 30); // Ускоренная анимация
+            });
+        }, 100);
+        
+        Logger.info('Галерея загружена', { count: paintings.length });
+        
+    } catch (error) {
+        Logger.error('Ошибка загрузки галереи', error);
+        Notifications.error('Не удалось загрузить галерею');
+    } finally {
+        LoadingIndicator.hide();
+    }
 }
 
 // === ВЫБОР КАРТИНЫ ===
 function selectPainting(id) {
+    if (!Validators.number(id, 1)) {
+        Logger.error('Невалидный ID картины', id);
+        return;
+    }
+
     try {
-        const painting = paintings.find(p => p.id === id);
+        const painting = AppState.paintings.find(p => p.id === id);
         if (!painting) {
-            throw new Error('Картина не найдена');
+            Logger.error('Картина не найдена', id);
+            Notifications.error('Картина не найдена');
+            return;
         }
 
         // Снимаем выделение с предыдущей
-        if (selectedPainting) {
-            const prevCard = document.getElementById(`card-${selectedPainting.id}`);
+        if (AppState.selectedPainting) {
+            const prevCard = document.getElementById(`card-${AppState.selectedPainting.id}`);
             if (prevCard) prevCard.classList.remove('selected');
         }
 
         // Если выбрали ту же картину - снимаем выделение
-        if (selectedPainting && selectedPainting.id === id) {
-            selectedPainting = null;
+        if (AppState.selectedPainting && AppState.selectedPainting.id === id) {
+            AppState.selectedPainting = null;
             return;
         }
 
         // Выбираем новую
-        selectedPainting = painting;
+        AppState.selectedPainting = painting;
         const card = document.getElementById(`card-${id}`);
         if (card) card.classList.add('selected');
         
@@ -371,17 +451,15 @@ function selectPainting(id) {
         showViewModal(painting);
         
     } catch (error) {
-        handleError(error, 'Не удалось открыть картину');
+        Logger.error('Ошибка при выборе картины', error);
+        Notifications.error('Не удалось открыть картину');
     }
 }
 
 // === МОДАЛЬНОЕ ОКНО ПРОСМОТРА ===
-let isModalOpen = false; // Флаг для предотвращения множественных вызовов
+let isModalOpen = false;
 
 function showViewModal(painting) {
-    console.log('showViewModal called with painting:', painting); // ОТЛАДКА
-    
-    // Защита от множественных вызовов
     if (isModalOpen) return;
     isModalOpen = true;
     
@@ -390,90 +468,55 @@ function showViewModal(painting) {
     
     if (!modal || !content) {
         isModalOpen = false;
-        handleError(new Error('Модальное окно не найдено'), 'Ошибка открытия окна');
+        Logger.error('Модальное окно не найдено');
         return;
     }
     
-    // Очищаем контент и создаем новую структуру каждый раз
+    // Очищаем и создаем контент
     content.innerHTML = '';
     
-    // ЛЕВАЯ КОЛОНКА С КАРТИНОЙ (кликабельная)
+    // Левая колонка с картиной
     const imageSection = document.createElement('div');
     imageSection.className = 'modal-image-section';
-    imageSection.style.cursor = 'pointer';
+    imageSection.style.cssText = 'cursor: pointer; position: relative;';
     imageSection.setAttribute('role', 'button');
     imageSection.setAttribute('tabindex', '0');
     imageSection.setAttribute('aria-label', 'Открыть в полноэкранном режиме');
     
     const img = document.createElement('img');
-    // Используем полный URL для MiniApp
-    const imageUrl = window.location.pathname.includes('miniapp') || window.location.pathname.includes('index') 
-        ? painting.image 
-        : painting.image;
-    img.src = imageUrl;
+    const imageUrl = painting.image;
     img.alt = painting.title;
-    
-    // Обработчик ошибки загрузки
-    img.onerror = function() {
-        console.warn('Ошибка загрузки изображения:', imageUrl);
-        this.style.display = 'none';
-        const placeholder = this.parentElement.querySelector('.placeholder');
-        if (placeholder) {
-            placeholder.style.display = 'flex';
-        }
-    };
+    img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s;';
     
     const placeholder = document.createElement('div');
     placeholder.className = 'placeholder';
     placeholder.textContent = '🎨';
-    placeholder.style.display = 'none';
+    placeholder.style.cssText = 'display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 64px; opacity: 0.3;';
     
     imageSection.appendChild(img);
     imageSection.appendChild(placeholder);
     
-    // ОБРАБОТЧИК КЛИКА НА КАРТИНУ (открытие полноэкранного режима)
-    imageSection.addEventListener('click', function(e) {
-        console.log('Клик на картину! painting:', painting); // ОТЛАДКА
+    // Обработчики для полноэкранного режима
+    const openFullscreen = (e) => {
         e.preventDefault();
-        
-        // Сохраняем выбранную картину
-        selectedPainting = painting;
-        
-        // Открываем полноэкранный режим
         showFullscreenGallery(painting);
-        
-        // Закрываем модальное окно просмотра
-        setTimeout(() => {
-            closeViewModal();
-        }, 100);
-    });
+        setTimeout(() => closeViewModal(), 100);
+    };
     
-    // ОБРАБОТЧИК КЛАВИАТУРЫ (Enter/Space)
-    imageSection.addEventListener('keypress', function(e) {
+    imageSection.addEventListener('click', openFullscreen);
+    imageSection.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
-            console.log('Клавиша на картину! painting:', painting); // ОТЛАДКА
-            e.preventDefault();
-            
-            // Сохраняем выбранную картину
-            selectedPainting = painting;
-            
-            // Открываем полноэкранный режим
-            showFullscreenGallery(painting);
-            
-            // Закрываем модальное окно просмотра
-            setTimeout(() => {
-                closeViewModal();
-            }, 100);
+            openFullscreen(e);
         }
     });
     
-    // ПРАВАЯ КОЛОНКА С ИНФОРМАЦИЕЙ
+    // Правая колонка с информацией
     const infoSection = document.createElement('div');
     infoSection.className = 'modal-info-section';
     
-    const infoContentDiv = document.createElement('div');
-    infoContentDiv.className = 'modal-info-content';
-    infoContentDiv.innerHTML = `
+    const infoContent = document.createElement('div');
+    infoContent.className = 'modal-info-content';
+    infoContent.innerHTML = `
         <div class="modal-title">Заказ: ${painting.title}</div>
         <div class="modal-category">${painting.category}</div>
         <div class="modal-price">${painting.price}</div>
@@ -483,41 +526,40 @@ function showViewModal(painting) {
         </div>
     `;
     
-    const actionsDiv = document.createElement('div');
-    actionsDiv.className = 'modal-actions';
+    const actions = document.createElement('div');
+    actions.className = 'modal-actions';
     
-    // Кнопка "Оформить заказ"
     const orderBtn = document.createElement('button');
     orderBtn.className = 'btn-primary';
     orderBtn.textContent = 'Оформить заказ';
     orderBtn.setAttribute('aria-label', 'Оформить заказ на эту картину');
     orderBtn.onclick = () => proceedToOrder();
     
-    actionsDiv.appendChild(orderBtn);
-    infoSection.appendChild(infoContentDiv);
-    infoSection.appendChild(actionsDiv);
+    actions.appendChild(orderBtn);
+    infoSection.appendChild(infoContent);
+    infoSection.appendChild(actions);
     
-    // КНОПКА ЗАКРЫТИЯ (крестик)
-    const closeBtnContainer = document.createElement('div');
-    closeBtnContainer.className = 'modal-close-container';
-    closeBtnContainer.setAttribute('role', 'button');
-    closeBtnContainer.setAttribute('aria-label', 'Закрыть окно просмотра');
-    closeBtnContainer.setAttribute('tabindex', '0');
+    // Кнопка закрытия
+    const closeContainer = document.createElement('div');
+    closeContainer.className = 'modal-close-container';
+    closeContainer.setAttribute('role', 'button');
+    closeContainer.setAttribute('aria-label', 'Закрыть окно просмотра');
+    closeContainer.setAttribute('tabindex', '0');
     
     const closeBtn = document.createElement('button');
     closeBtn.className = 'modal-close';
     closeBtn.innerHTML = '×';
     closeBtn.onclick = () => closeViewModal();
     
-    closeBtnContainer.appendChild(closeBtn);
+    closeContainer.appendChild(closeBtn);
     
-    // СОБИРАЕМ ВСЮ СТРУКТУРУ
+    // Собираем структуру
     content.appendChild(imageSection);
     content.appendChild(infoSection);
-    content.appendChild(closeBtnContainer);
+    content.appendChild(closeContainer);
     
     // Обработчик клавиатуры для крестика
-    closeBtnContainer.addEventListener('keypress', (e) => {
+    closeContainer.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             closeViewModal();
@@ -528,17 +570,18 @@ function showViewModal(painting) {
     modal.classList.add('visible');
     document.body.style.overflow = 'hidden';
     
-    // Управление фокусом
-    setTimeout(() => {
-        closeBtnContainer.focus();
-    }, 100);
+    // Загружаем изображение
+    safeLoadImage(img, imageUrl, painting.title);
     
-    // Добавляем ARIA атрибуты
+    // Управление фокусом
+    setTimeout(() => closeContainer.focus(), 100);
+    
+    // ARIA атрибуты
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-labelledby', 'modal-title');
     
-    // Сбрасываем флаг после завершения анимации
+    // Сбрасываем флаг после анимации
     setTimeout(() => {
         isModalOpen = false;
     }, 300);
@@ -546,10 +589,7 @@ function showViewModal(painting) {
 
 function closeViewModal() {
     const modal = document.getElementById('viewModal');
-    if (!modal) return;
-    
-    // Предотвращаем множественные вызовы
-    if (!modal.classList.contains('visible')) return;
+    if (!modal || !modal.classList.contains('visible')) return;
     
     modal.classList.remove('visible');
     document.body.style.overflow = 'auto';
@@ -559,29 +599,23 @@ function closeViewModal() {
     modal.removeAttribute('role');
     modal.removeAttribute('aria-labelledby');
     
-    // Снимаем выделение только если не переходим в полноэкранный режим И не переходим к заказу
+    // Снимаем выделение только если не переходим в полноэкранный режим или к заказу
     const galleryModal = document.getElementById('fullscreenGallery');
     const isFullscreenOpen = galleryModal && galleryModal.classList.contains('visible');
     const confirmModal = document.getElementById('confirmModal');
     const isConfirmOpen = confirmModal && confirmModal.classList.contains('visible');
     
-    if (!isFullscreenOpen && !isFullscreenOpen && selectedPainting) {
-        const card = document.getElementById(`card-${selectedPainting.id}`);
+    if (!isFullscreenOpen && !isConfirmOpen && AppState.selectedPainting) {
+        const card = document.getElementById(`card-${AppState.selectedPainting.id}`);
         if (card) {
             card.classList.remove('selected');
-            // Возвращаем фокус на карточку
             card.focus();
         }
-        // НЕ сбрасываем selectedPainting если переходим к заказу
-        if (!isConfirmOpen) {
-            selectedPainting = null;
-        }
+        AppState.selectedPainting = null;
     }
-    
-    isModalOpen = false;
 }
 
-// === ПОЛНОЭКРАННАЯ ГАЛЕРЕЯ С ЗАТЕМНЕНИЕМ ===
+// === ПОЛНОЭКРАННАЯ ГАЛЕРЕЯ ===
 function showFullscreenGallery(painting) {
     const galleryModal = document.getElementById('fullscreenGallery');
     const galleryImage = document.getElementById('fullscreenImage');
@@ -591,41 +625,33 @@ function showFullscreenGallery(painting) {
     const galleryLoading = document.querySelector('.gallery-loading');
     
     if (!galleryModal || !galleryImage || !galleryOverlay) {
-        handleError(new Error('Галерея не найдена'), 'Ошибка открытия галереи');
+        Logger.error('Галерея не найдена');
         return;
     }
     
     // Показываем индикатор загрузки
     if (galleryLoading) galleryLoading.classList.add('visible');
     
-    // Устанавливаем изображение (используем полный путь)
+    // Устанавливаем изображение
     const imageUrl = painting.image;
-    galleryImage.src = imageUrl;
     galleryImage.alt = painting.title;
+    galleryImage.style.opacity = '0';
     
     // Обновляем информацию
     if (galleryTitle) galleryTitle.textContent = painting.title;
     if (galleryCategory) galleryCategory.textContent = painting.category;
     
-    // Обработчик загрузки изображения
-    galleryImage.onload = function() {
+    // Загружаем изображение
+    safeLoadImage(galleryImage, imageUrl, painting.title).then(() => {
         if (galleryLoading) galleryLoading.classList.remove('visible');
-        galleryImage.style.opacity = '1';
-    };
-    
-    // Обработчик ошибки загрузки
-    galleryImage.onerror = function() {
-        if (galleryLoading) galleryLoading.classList.remove('visible');
-        showNotification('Не удалось загрузить изображение', 'error');
-        closeFullscreenGallery();
-    };
+    });
     
     // Показываем модальное окно
     galleryModal.classList.add('visible');
     galleryOverlay.classList.add('visible');
     document.body.style.overflow = 'hidden';
     
-    // Добавляем ARIA атрибуты
+    // ARIA атрибуты
     galleryModal.setAttribute('aria-modal', 'true');
     galleryModal.setAttribute('role', 'dialog');
     galleryModal.setAttribute('aria-label', `Полноэкранное просмотра: ${painting.title}`);
@@ -636,8 +662,17 @@ function showFullscreenGallery(painting) {
         if (closeBtn) closeBtn.focus();
     }, 100);
     
-    // Добавляем обработчики клавиатуры для галереи
-    setupGalleryKeyboardNavigation();
+    // Обработчик клавиатуры
+    const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeFullscreenGallery();
+        }
+    };
+    
+    // Сохраняем обработчик для удаления
+    galleryModal.dataset.keyHandler = 'true';
+    document.addEventListener('keydown', keyHandler);
+    galleryModal.dataset.keyHandlerFunc = keyHandler;
 }
 
 function closeFullscreenGallery() {
@@ -648,7 +683,14 @@ function closeFullscreenGallery() {
     
     if (!galleryModal || !galleryOverlay) return;
     
-    // Сначала скрываем модальное окно
+    // Удаляем обработчик клавиатуры
+    if (galleryModal.dataset.keyHandlerFunc) {
+        document.removeEventListener('keydown', galleryModal.dataset.keyHandlerFunc);
+        delete galleryModal.dataset.keyHandlerFunc;
+        delete galleryModal.dataset.keyHandler;
+    }
+    
+    // Скрываем модальное окно
     galleryModal.classList.remove('visible');
     galleryOverlay.classList.remove('visible');
     document.body.style.overflow = 'auto';
@@ -658,63 +700,32 @@ function closeFullscreenGallery() {
     galleryModal.removeAttribute('role');
     galleryModal.removeAttribute('aria-label');
     
-    // Удаляем обработчики клавиатуры
-    removeGalleryKeyboardNavigation();
-    
-    // Очищаем изображение и скрываем индикатор загрузки
+    // Очищаем изображение
     if (galleryImage) {
-        // Удаляем обработчики событий чтобы предотвратить повторные вызовы
         galleryImage.onload = null;
         galleryImage.onerror = null;
-        
-        // Очищаем src только после небольшой задержки
         setTimeout(() => {
-            if (galleryImage) {
-                galleryImage.src = '';
-                galleryImage.style.opacity = '0';
-            }
-            if (galleryLoading) {
-                galleryLoading.classList.remove('visible');
-            }
+            galleryImage.src = '';
+            galleryImage.style.opacity = '0';
         }, 50);
     }
     
-    // Возвращаемся на страницу заказа (открываем модальное окно просмотра снова)
-    if (selectedPainting) {
+    if (galleryLoading) {
+        galleryLoading.classList.remove('visible');
+    }
+    
+    // Возвращаемся к модальному окну просмотра
+    if (AppState.selectedPainting) {
         setTimeout(() => {
-            showViewModal(selectedPainting);
+            showViewModal(AppState.selectedPainting);
         }, 100);
     }
 }
 
-// === НАВИГАЦИЯ В ПОЛНОЭКРАННОЙ ГАЛЕРЕЕ (ТОЛЬКО ESCAPE) ===
-function setupGalleryKeyboardNavigation() {
-    document.addEventListener('keydown', galleryKeyHandler);
-}
-
-function removeGalleryKeyboardNavigation() {
-    document.removeEventListener('keydown', galleryKeyHandler);
-}
-
-function galleryKeyHandler(e) {
-    const galleryModal = document.getElementById('fullscreenGallery');
-    if (!galleryModal || !galleryModal.classList.contains('visible')) return;
-    
-    // Только закрытие по ESCAPE
-    if (e.key === 'Escape') {
-        closeFullscreenGallery();
-    }
-    // Убираем навигацию стрелками
-}
-
-// === НАВИГАЦИЯ МЕЖДУ КАРТИНАМИ (УБРАНА) ===
-// Функции navigateToPrevious и navigateToNext удалены
-// Функция updateFullscreenGallery удалена
-
 // === ПЕРЕХОД К ЗАКАЗУ ===
 async function proceedToOrder() {
-    if (!selectedPainting) {
-        showNotification('Сначала выберите картину', 'error');
+    if (!AppState.selectedPainting) {
+        Notifications.error('Сначала выберите картину');
         return;
     }
 
@@ -729,649 +740,264 @@ async function proceedToOrder() {
         isModalOpen = false;
     }
     
-    // Показываем индикатор загрузки
-    showLoading('Создание заказа...');
+    LoadingIndicator.show('Создание заказа...');
     
     try {
-        // Проверяем, находимся ли мы в Telegram MiniApp
         const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
         
         if (isTelegramWebview) {
-            console.log('📱 Режим MiniApp: отправляем данные через sendData()');
+            Logger.info('Режим MiniApp: отправляем данные через sendData()');
             
-            // В режиме MiniApp отправляем данные напрямую
             const orderData = {
                 action: 'create_order',
                 painting: {
-                    id: selectedPainting.id,
-                    title: selectedPainting.title,
-                    category: selectedPainting.category,
-                    price: selectedPainting.price
+                    id: AppState.selectedPainting.id,
+                    title: AppState.selectedPainting.title,
+                    category: AppState.selectedPainting.category,
+                    price: AppState.selectedPainting.price
                 },
                 timestamp: Date.now()
             };
             
-            // Отправляем данные боту
             window.Telegram.WebApp.sendData(JSON.stringify(orderData));
             
-            // Закрываем MiniApp
             setTimeout(() => {
                 window.Telegram.WebApp.close();
             }, 500);
             
         } else {
-            console.log('🌐 Обычный режим: открываем Telegram с deep link');
+            Logger.info('Обычный режим: открываем Telegram с quick order');
             
-            // В обычном режиме создаем заказ через API и открываем Telegram
-            const apiUrl = `${API_CONFIG.baseUrl}${API_CONFIG.endpoints.createOrder}`;
+            const param = `quick_order_${AppState.selectedPainting.id}`;
+            const url = `https://t.me/flexyframe_bot?start=${encodeURIComponent(param)}`;
             
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        user_id: 12345,
-                        painting_id: selectedPainting.id,
-                        painting_title: selectedPainting.title,
-                        price: parseInt(selectedPainting.price.replace('₽', ''))
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    // Открываем Telegram с deep link
-                    const param = `order_${result.order_id}_${result.token}`;
-                    const url = `https://t.me/flexyframe_bot?start=${param}`;
-                    
-                    showNotification('Открываю Telegram...', 'success');
-                    window.open(url, '_blank');
-                } else {
-                    throw new Error(result.error || 'Не удалось создать заказ');
-                }
-            } catch (error) {
-                console.error('Ошибка создания заказа:', error);
-                // Fallback: просто открываем бота
-                const url = `https://t.me/flexyframe_bot`;
-                window.open(url, '_blank');
-            }
+            Notifications.success('Открываю Telegram для оформления заказа...');
+            window.open(url, '_blank');
         }
         
     } catch (error) {
-        console.error('Ошибка в proceedToOrder:', error);
-        handleError(error, 'Ошибка при создании заказа');
+        Logger.error('Ошибка в proceedToOrder:', error);
+        Notifications.error('Ошибка при создании заказа');
     } finally {
-        hideLoading();
+        LoadingIndicator.hide();
         
         // Сбрасываем выбор
-        if (selectedPainting) {
-            const card = document.getElementById(`card-${selectedPainting.id}`);
+        if (AppState.selectedPainting) {
+            const card = document.getElementById(`card-${AppState.selectedPainting.id}`);
             if (card) card.classList.remove('selected');
         }
-        selectedPainting = null;
+        AppState.selectedPainting = null;
     }
 }
 
-function closeConfirmModal() {
-    const modal = document.getElementById('confirmModal');
-    if (!modal) return;
+// === НАВИГАЦИЯ И МЕНЮ ===
+async function showPaintingsMenu() {
+    const grid = document.getElementById('galleryGrid');
+    if (!grid) return;
     
-    modal.classList.remove('visible');
-    document.body.style.overflow = 'auto';
-    modal.removeAttribute('aria-modal');
-    modal.removeAttribute('role');
+    // Прокручиваем к галерее
+    grid.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Подсвечиваем галерею
+    grid.style.animation = 'none';
+    setTimeout(() => {
+        grid.style.animation = 'pulse 0.6s ease-in-out';
+    }, 10);
+    
+    Logger.info('Переход к выбору картин');
 }
 
-// === TELEGRAM БОТ С ЗАКАЗОМ ===
-async function openTelegramBotWithOrder() {
-    console.log('🎯 openTelegramBotWithOrder() вызвана');
+async function showSiteLink() {
+    const message = 
+        `📱 <b>Сайт FlexyFrame</b>\n\n` +
+        `Откройте сайт для удобного выбора картин:\n\n` +
+        `🔗 <b>${API_CONFIG.baseUrl}/index.html</b>\n\n` +
+        `💡 <i>Как открыть в Telegram:</i>\n` +
+        `1. Скопируйте ссылку\n` +
+        `2. Вставьте в поиске Telegram\n` +
+        `3. Или откройте в браузере\n\n` +
+        `✅ На сайте можно:\n` +
+        `• Выбрать картину\n` +
+        `• Увидеть цену\n` +
+        `• Нажать "Оформить заказ"\n` +
+        `• Автоматически перейти в бота`;
     
-    if (!selectedPainting) {
-        showNotification('Ошибка: картина не выбрана', 'error');
-        return;
-    }
-
-    // Проверяем, находимся ли мы в Telegram MiniApp
-    const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
-    console.log('📱 Telegram WebApp:', isTelegramWebview);
-    console.log('🎨 Выбранная картина:', selectedPainting);
-    
-    try {
-        if (isTelegramWebview) {
-            console.log('🔒 Закрываем MiniApp...');
-            window.Telegram.WebApp.close();
-            console.log('✅ MiniApp закрыта');
-        } else {
-            // Формируем сообщение с информацией о заказе
-            const message = `Здравствуйте! Хочу заказать картину:
-            
-🎨 "${selectedPainting.title}"
-📁 Категория: ${selectedPainting.category}
-💰 Цена: ${selectedPainting.price}
-
-Пожалуйста, помогите оформить заказ!`;
-            
-            const url = `https://t.me/flexyframe_bot?text=${encodeURIComponent(message)}`;
-            
-            showNotification('Открываю Telegram с заказом...', 'success');
-            window.open(url, '_blank');
-        }
-        
-        // Сбрасываем выбор
-        if (selectedPainting) {
-            const card = document.getElementById(`card-${selectedPainting.id}`);
-            if (card) card.classList.remove('selected');
-        }
-        selectedPainting = null;
-        
-    } catch (error) {
-        console.error('❌ Ошибка в openTelegramBotWithOrder():', error);
-        
-        if (!isTelegramWebview) {
-            handleError(error, 'Ошибка при открытии Telegram');
-        } else {
-            window.Telegram.WebApp.close();
-        }
-    }
-}
-
-// === TELEGRAM БОТ (СТАТИЧЕСКИЙ РЕЖИМ) ===
-async function openTelegramBot() {
-    console.log('🎯 openTelegramBot() вызвана');
-    
-    if (!selectedPainting) {
-        showNotification('Сначала выберите картину', 'error');
-        return;
-    }
-
-    // Проверяем, находимся ли мы в Telegram MiniApp
-    const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
-    console.log('📱 Telegram WebApp:', isTelegramWebview);
-    console.log('🎨 Выбранная картина:', selectedPainting);
-    
-    try {
-        closeConfirmModal();
-        
-        // В MiniApp не показываем индикатор загрузки
-        if (!isTelegramWebview) {
-            showLoading('Подготовка заказа...');
-        }
-        
-        // В статическом режиме всегда используем fallback
-        console.log('⚠️ Статический режим: используем прямую ссылку');
-        
-        if (isTelegramWebview) {
-            console.log('🔒 Закрываем MiniApp...');
-            // В MiniApp просто закрываем
-            window.Telegram.WebApp.close();
-            console.log('✅ MiniApp закрыта');
-        } else {
-            // В обычном браузере открываем Telegram с информацией о заказе
-            const message = `Здравствуйте! Хочу заказать картину "${selectedPainting.title}" (${selectedPainting.category}) - ${selectedPainting.price}`;
-            const url = `https://t.me/flexyframe_bot?text=${encodeURIComponent(message)}`;
-            
-            hideLoading();
-            showNotification('Открываю Telegram...', 'success');
-            window.open(url, '_blank');
-        }
-        
-        // Сбрасываем выбор
-        if (selectedPainting) {
-            const card = document.getElementById(`card-${selectedPainting.id}`);
-            if (card) card.classList.remove('selected');
-        }
-        selectedPainting = null;
-        
-    } catch (error) {
-        console.error('❌ Ошибка в openTelegramBot():', error);
-        
-        // В MiniApp не показываем ошибки
-        if (!isTelegramWebview) {
-            hideLoading();
-            handleError(error, 'Ошибка при создании заказа');
-            
-            setTimeout(() => {
-                if (confirm('Не удалось открыть Telegram. Попробовать снова?')) {
-                    const message = `Здравствуйте! Хочу заказать картину "${selectedPainting.title}"`;
-                    const url = `https://t.me/flexyframe_bot?text=${encodeURIComponent(message)}`;
-                    window.open(url, '_blank');
-                }
-            }, 1000);
-        } else {
-            // В MiniApp просто закрываем при ошибке
-            console.log('🔒 Закрываем MiniApp при ошибке...');
-            window.Telegram.WebApp.close();
-        }
-    }
-}
-
-function openTelegram(paintingTitle = '') {
-    try {
-        const message = paintingTitle 
-            ? `Здравствуйте! Хочу заказать картину "${paintingTitle}"`
-            : 'Здравствуйте! Хочу заказать уникальную граффити-арт работу';
-        
-        const url = `https://t.me/flexyframe_bot?text=${encodeURIComponent(message)}`;
-        
-        showNotification('Открываю Telegram...', 'success');
-        window.open(url, '_blank');
-        
-    } catch (error) {
-        handleError(error, 'Не удалось открыть Telegram');
-    }
-}
-
-// === АНИМАЦИИ ПРИ СКРОЛЛЕ ===
-function setupScrollAnimations() {
-    // Удаляем старый observer если есть
-    if (window.scrollObserver) {
-        window.scrollObserver.disconnect();
-    }
-    
-    const scrollObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('fade-in');
-                // Оптимизация: перестаем наблюдать после появления
-                scrollObserver.unobserve(entry.target);
-            }
-        });
-    }, {
-        threshold: 0.1,
-        rootMargin: '50px 0px'
-    });
-
-    document.querySelectorAll('section').forEach(section => {
-        scrollObserver.observe(section);
-    });
-    
-    window.scrollObserver = scrollObserver;
-}
-
-// === ПЛАВНАЯ НАВИГАЦИЯ ===
-function setupSmoothScroll() {
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-        anchor.addEventListener('click', function (e) {
-            e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        });
-    });
-}
-
-// === НАВИГАЦИЯ КЛАВИШАМИ И СВАЙПЫ ===
-let currentPaintingIndex = 0;
-let touchStartX = 0;
-let touchEndX = 0;
-
-// Навигация клавишами для модального окна просмотра (заказы)
-function setupKeyboardNavigation() {
-    document.addEventListener('keydown', function(e) {
-        const viewModal = document.getElementById('viewModal');
-        const isViewModalOpen = viewModal && viewModal.classList.contains('visible');
-        
-        // Если открыто модальное окно просмотра - навигация стрелками для заказов
-        if (isViewModalOpen) {
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                navigateToPrevious();
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                navigateToNext();
-            }
-        }
-        
-        // Закрытие по ESC
-        if (e.key === 'Escape') {
-            closeViewModal();
-            closeConfirmModal();
-            closeFullscreenGallery();
-        }
-    });
-}
-
-// Поддержка свайпов для мобильных устройств (ТОЛЬКО ДЛЯ МОДАЛЬНОГО ОКНА ПРОСМОТРА)
-function setupSwipeNavigation() {
-    const viewModal = document.getElementById('viewModal');
-    if (!viewModal) return;
-    
-    // Обработчики касаний
-    viewModal.addEventListener('touchstart', function(e) {
-        touchStartX = e.changedTouches[0].screenX;
-    }, { passive: true });
-    
-    viewModal.addEventListener('touchend', function(e) {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-    }, { passive: true });
-}
-
-// Обработка свайпа (только для модального окна просмотра)
-function handleSwipe() {
-    const swipeThreshold = 50; // Минимальное расстояние для свайпа
-    
-    if (touchEndX < touchStartX - swipeThreshold) {
-        // Свайп влево -> следующая картинка
-        navigateToNext();
-    }
-    
-    if (touchEndX > touchStartX + swipeThreshold) {
-        // Свайп вправо -> предыдущая картинка
-        navigateToPrevious();
-    }
-}
-
-// === НАВИГАЦИЯ МЕЖДУ КАРТИНАМИ (ТОЛЬКО ДЛЯ МОДАЛЬНОГО ОКНА ПРОСМОТРА) ===
-function navigateToPrevious() {
-    if (!selectedPainting) return;
-    
-    try {
-        const currentIndex = paintings.findIndex(p => p.id === selectedPainting.id);
-        const prevIndex = currentIndex > 0 ? currentIndex - 1 : paintings.length - 1;
-        
-        const prevPainting = paintings[prevIndex];
-        if (prevPainting) {
-            // Обновляем выделение
-            const prevCard = document.getElementById(`card-${selectedPainting.id}`);
-            if (prevCard) prevCard.classList.remove('selected');
-            
-            selectedPainting = prevPainting;
-            const newCard = document.getElementById(`card-${prevPainting.id}`);
-            if (newCard) newCard.classList.add('selected');
-            
-            // Проверяем, открыта ли полноэкранная галерея
-            const galleryModal = document.getElementById('fullscreenGallery');
-            const isFullscreenOpen = galleryModal && galleryModal.classList.contains('visible');
-            
-            if (isFullscreenOpen) {
-                // Обновляем полноэкранную галерею
-                updateFullscreenGallery(prevPainting);
-            } else {
-                // Обновляем обычное модальное окно
-                updateViewModal(prevPainting);
-            }
-            
-            // Показываем уведомление
-            showNotification(`Переключено на: ${prevPainting.title}`, 'info', 1500);
-        }
-    } catch (error) {
-        handleError(error, 'Ошибка навигации');
-    }
-}
-
-function navigateToNext() {
-    if (!selectedPainting) return;
-    
-    try {
-        const currentIndex = paintings.findIndex(p => p.id === selectedPainting.id);
-        const nextIndex = currentIndex < paintings.length - 1 ? currentIndex + 1 : 0;
-        
-        const nextPainting = paintings[nextIndex];
-        if (nextPainting) {
-            // Обновляем выделение
-            const prevCard = document.getElementById(`card-${selectedPainting.id}`);
-            if (prevCard) prevCard.classList.remove('selected');
-            
-            selectedPainting = nextPainting;
-            const newCard = document.getElementById(`card-${nextPainting.id}`);
-            if (newCard) newCard.classList.add('selected');
-            
-            // Проверяем, открыта ли полноэкранная галерея
-            const galleryModal = document.getElementById('fullscreenGallery');
-            const isFullscreenOpen = galleryModal && galleryModal.classList.contains('visible');
-            
-            if (isFullscreenOpen) {
-                // Обновляем полноэкранную галерею
-                updateFullscreenGallery(nextPainting);
-            } else {
-                // Обновляем обычное модальное окно
-                updateViewModal(nextPainting);
-            }
-            
-            // Показываем уведомление
-            showNotification(`Переключено на: ${nextPainting.title}`, 'info', 1500);
-        }
-    } catch (error) {
-        handleError(error, 'Ошибка навигации');
-    }
-}
-
-// === ОБНОВЛЕНИЕ ПОЛНОЭКРАННОЙ ГАЛЕРЕИ ===
-function updateFullscreenGallery(painting) {
-    const galleryImage = document.getElementById('fullscreenImage');
-    const galleryTitle = document.getElementById('galleryTitle');
-    const galleryCategory = document.getElementById('galleryCategory');
-    const galleryLoading = document.querySelector('.gallery-loading');
-    
-    if (!galleryImage) return;
-    
-    // Показываем индикатор загрузки
-    if (galleryLoading) galleryLoading.classList.add('visible');
-    
-    // Обновляем информацию
-    if (galleryTitle) galleryTitle.textContent = painting.title;
-    if (galleryCategory) galleryCategory.textContent = painting.category;
-    
-    // Предзагрузка нового изображения
-    const tempImg = new Image();
-    tempImg.onload = function() {
-        galleryImage.src = painting.image;
-        galleryImage.alt = painting.title;
-        if (galleryLoading) galleryLoading.classList.remove('visible');
+    const keyboard = {
+        inline_keyboard: [
+            [{ text: '🌐 Открыть сайт', url: `${API_CONFIG.baseUrl}/index.html` }]
+        ]
     };
-    tempImg.onerror = function() {
-        if (galleryLoading) galleryLoading.classList.remove('visible');
-        showNotification('Не удалось загрузить изображение', 'error');
-    };
-    tempImg.src = painting.image;
-}
-
-// === ОБНОВЛЕНИЕ МОДАЛЬНОГО ОКНА ПРОСМОТРА ===
-function updateViewModal(painting) {
-    const content = document.getElementById('viewModalContent');
-    if (!content) return;
     
-    // Обновляем картинку
-    const img = content.querySelector('img');
-    if (img) {
-        img.src = painting.image;
-        img.alt = painting.title;
+    // В обычном режиме показываем уведомление
+    if (!window.Telegram || !window.Telegram.WebApp) {
+        Notifications.show(message, 'info', 8000);
     }
     
-    // Обновляем информацию
-    const title = content.querySelector('.modal-title');
-    const category = content.querySelector('.modal-category');
-    const price = content.querySelector('.modal-price');
-    
-    if (title) title.textContent = `Заказ: ${painting.title}`;
-    if (category) category.textContent = painting.category;
-    if (price) price.textContent = painting.price;
+    Logger.info('Ссылка на сайт показана');
 }
 
-// === СКРЫТИЕ ШАПКИ ПРИ ПРОКРУТКЕ ===
-function setupHeaderScroll() {
-    let lastScroll = 0;
-    const header = document.querySelector('header');
-    const scrollThreshold = 200;
+async function showHowItWorks() {
+    const message = 
+        `📋 <b>Как сделать заказ:</b>\n\n` +
+        `1️⃣ <b>Выберите картину</b> из галереи\n` +
+        `2️⃣ <b>Оформите заказ</b> в боте\n` +
+        `3️⃣ <b>Оплатите</b> удобным способом\n` +
+        `4️⃣ <b>Получите работу</b> через 2-4 дня\n\n` +
+        `💳 <b>Способы оплаты:</b>\n` +
+        `• ЮMoney\n` +
+        `• Тинькофф\n` +
+        `• Сбербанк\n\n` +
+        `📦 <b>Доставка:</b>\n` +
+        `• Электронная версия (PDF/JPG) - мгновенно\n` +
+        `• Физическая печать - 2-4 дня + доставка\n\n` +
+        `💡 <b>Сайт:</b> ${API_CONFIG.baseUrl}/index.html`;
     
-    if (!header) return;
+    Notifications.show(message, 'info', 8000);
+    Logger.info('Инструкция показана');
+}
+
+async function showAbout() {
+    const message = 
+        `🎨 <b>FlexyFrame — где искусство оживает в каждом штрихе</b>\n\n` +
+        `Добро пожаловать в FlexyFrame — пространство, где цифровая эстетика встречается с ручной росписью, где ваши воспоминания становятся произведениями искусства, а любимые персонажи обретают новую жизнь на холсте.\n\n` +
+        `Мы не просто печатаем картины — мы создаём уникальные арт-объекты, которые становятся центром вашего интерьера и отражением вашего вкуса.\n\n` +
+        `✨ <b>Наши преимущества:</b>\n` +
+        `🖼️ Печать на премиальном холсте\n` +
+        `📏 Идеальный формат 60×50 см\n` +
+        `🖌️ Ручная роспись по запросу\n` +
+        `🌲 Авторские рамы из натуральной сосны\n\n` +
+        `✅ <b>У нас вы можете:</b>\n` +
+        `• Заказать картину по собственному макету\n` +
+        `• Выбрать из авторской коллекции\n` +
+        `• Превратить фотографию в музейный экспонат\n\n` +
+        `📩 <b>Контакты:</b>\n` +
+        `• Telegram: @flexyframe_bot\n` +
+        `• Email: art@flexyframe.ru\n\n` +
+        `🔗 <b>Сайт:</b> ${API_CONFIG.baseUrl}/index.html\n\n` +
+        `💡 <i>FlexyFrame — это не просто картина. Это история, подсвеченная вашим вкусом.</i>`;
     
-    // Используем requestAnimationFrame для оптимизации
-    let ticking = false;
+    Notifications.show(message, 'info', 10000);
+    Logger.info('Информация о проекте показана');
+}
+
+async function showMyOrders() {
+    // В статическом режиме показываем сообщение
+    const message = 
+        `📋 <b>Ваши заказы</b>\n\n` +
+        `Для просмотра истории заказов пожалуйста:\n` +
+        `1. Откройте бота @flexyframe_bot\n` +
+        `2. Введите команду /start\n` +
+        `3. Выберите "🛒 Мои заказы"\n\n` +
+        `💡 Все ваши заказы сохраняются в нашей системе и доступны в любое время.`;
     
-    window.addEventListener('scroll', function() {
-        if (!ticking) {
-            window.requestAnimationFrame(function() {
-                const currentScroll = window.pageYOffset;
-                
-                if (currentScroll > scrollThreshold) {
-                    if (currentScroll > lastScroll) {
-                        // Прокрутка вниз - скрываем шапку
-                        header.classList.add('hidden');
-                    }
-                    // При прокрутке вверх НЕ показываем шапку
-                } else {
-                    // Если мало прокрутки (меньше 200px) - показываем шапку
-                    header.classList.remove('hidden');
-                }
-                
-                lastScroll = currentScroll;
-                ticking = false;
-            });
-            
-            ticking = true;
+    Notifications.show(message, 'info', 8000);
+    Logger.info('Запрос истории заказов');
+}
+
+// === ОБРАБОТКА ОШИБОК И ИСКЛЮЧЕНИЙ ===
+function setupErrorHandling() {
+    // Обработка необработанных Promise
+    window.addEventListener('unhandledrejection', (event) => {
+        Logger.error('Unhandled promise rejection', event.reason);
+        Notifications.error('Произошла ошибка сети');
+        event.preventDefault();
+    });
+    
+    // Обработка глобальных ошибок
+    window.addEventListener('error', (event) => {
+        // Игнорируем ошибки ResizeObserver
+        if (event.error && event.error.message && event.error.message.includes('ResizeObserver')) {
+            return;
         }
+        
+        Logger.error('Global error', event.error);
+        // Не показываем уведомление для всех ошибок, только для критических
+    });
+    
+    // Обработка изменения сетевого статуса
+    window.addEventListener('online', () => {
+        Notifications.success('Интернет-соединение восстановлено');
+    });
+    
+    window.addEventListener('offline', () => {
+        Notifications.error('Потеряно интернет-соединение');
     });
 }
 
 // === ИНИЦИАЛИЗАЦИЯ ===
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Проверка поддержки API
         if (!('IntersectionObserver' in window)) {
-            showNotification('Обновите браузер для лучшего опыта', 'info', 5000);
+            Notifications.warn('Обновите браузер для лучшего опыта');
         }
         
         // Проверка сетевого соединения
         if (!navigator.onLine) {
-            showNotification('Отсутствует интернет-соединение', 'error', 5000);
+            Notifications.error('Отсутствует интернет-соединение');
         }
         
-        // Загружаем данные с сервера
-        await loadPaintingsData();
-        
         // Загружаем галерею
-        loadGallery();
+        await loadGallery();
         
-        // Настраиваем анимации и навигацию
-        setupScrollAnimations();
-        setupSmoothScroll();
-        setupKeyboardNavigation();
-        setupSwipeNavigation();
-        setupHeaderScroll();
+        // Настраиваем обработку ошибок
+        setupErrorHandling();
+        
+        // Настраиваем плавную навигацию
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
         
         // Закрытие модальных окон по клику на фон
         const viewModal = document.getElementById('viewModal');
-        const confirmModal = document.getElementById('confirmModal');
         const fullscreenGallery = document.getElementById('fullscreenGallery');
         
         if (viewModal) {
-            viewModal.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeViewModal();
-                }
-            });
-        }
-        
-        if (confirmModal) {
-            confirmModal.addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeConfirmModal();
-                }
+            viewModal.addEventListener('click', (e) => {
+                if (e.target === viewModal) closeViewModal();
             });
         }
         
         if (fullscreenGallery) {
-            fullscreenGallery.addEventListener('click', function(e) {
-                if (e.target === this || e.target.classList.contains('gallery-overlay')) {
+            fullscreenGallery.addEventListener('click', (e) => {
+                if (e.target === fullscreenGallery || e.target.classList.contains('gallery-overlay')) {
                     closeFullscreenGallery();
                 }
             });
         }
         
-        // Предотвращение утечек памяти при закрытии страницы
-        window.addEventListener('beforeunload', function() {
-            if (observer) observer.disconnect();
-            if (window.scrollObserver) window.scrollObserver.disconnect();
-            // Очистка sessionStorage
-            sessionStorage.removeItem('image_error_shown');
-        });
-        
-        // Обработка ошибок Promise
-        window.addEventListener('unhandledrejection', function(event) {
-            console.error('Unhandled promise rejection:', event.reason);
-            showNotification('Произошла ошибка сети', 'error', 5000);
-        });
-        
-        // Обработка ошибок JavaScript
-        window.addEventListener('error', function(event) {
-            console.error('Global error:', event.error);
-            // Не показываем уведомление для всех ошибок, только для критических
-            if (event.error && event.error.message && !event.error.message.includes('ResizeObserver')) {
-                showNotification('Произошла ошибка', 'error', 3000);
-            }
-        });
-        
-        // Оптимизация: предзагрузка первых 3 изображений
+        // Предзагрузка первых изображений
         setTimeout(() => {
-            preloadImages();
+            const imagesToPreload = AppState.paintings.slice(0, 3).map(p => p.image);
+            imagesToPreload.forEach(src => {
+                const img = new Image();
+                img.src = src;
+            });
         }, 1000);
         
-    } catch (error) {
-        handleError(error, 'Ошибка инициализации');
-    }
-});
-
-// === ОТПРАВКА АНАЛИТИКИ (опционально) ===
-function trackEvent(eventName, data) {
-    // Безопасная отправка аналитики
-    try {
-        console.log('Track:', eventName, data);
-        
-        // Здесь можно добавить отправку в Google Analytics или другие системы
-        // Например: gtag('event', eventName, data);
+        Logger.info('Приложение инициализировано');
         
     } catch (error) {
-        // Не показываем ошибку пользователю, только в консоль
-        console.warn('Analytics error:', error);
+        Logger.error('Ошибка инициализации', error);
+        Notifications.error('Ошибка при запуске приложения');
     }
-}
-
-// === ДОПОЛНИТЕЛЬНЫЕ УТИЛИТЫ ===
-
-// Функция для предзагрузки изображений
-function preloadImages() {
-    const imagesToPreload = paintings.slice(0, 3).map(p => p.image);
-    
-    imagesToPreload.forEach(src => {
-        const img = new Image();
-        img.src = src;
-    });
-}
-
-// Функция для проверки сетевого соединения
-function checkConnection() {
-    if (!navigator.onLine) {
-        showNotification('Отсутствует интернет-соединение', 'error', 5000);
-        return false;
-    }
-    return true;
-}
-
-// Добавляем обработчик изменения сетевого статуса
-window.addEventListener('online', () => {
-    showNotification('Интернет-соединение восстановлено', 'success');
 });
 
-window.addEventListener('offline', () => {
-    showNotification('Потеряно интернет-соединение', 'error');
-});
-
-// Экспорт функций для глобального доступа (если нужно)
+// === ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ HTML ===
 window.FlexyFrame = {
-    selectPainting,
+    showPaintingsMenu,
+    showSiteLink,
+    showHowItWorks,
+    showAbout,
+    showMyOrders,
     proceedToOrder,
-    openTelegramBot,
-    openTelegram,
     closeViewModal,
-    closeConfirmModal,
-    showNotification,
-    trackEvent
+    closeFullscreenGallery,
+    selectPainting
 };

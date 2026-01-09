@@ -175,6 +175,28 @@ function handleStartParameter(chatId, param) {
         }
     }
     
+    // Обработка quick_order параметров
+    if (param.startsWith('quick_order_')) {
+        const parts = param.split('_');
+        const paintingId = parseInt(parts[2]);
+        
+        const painting = findPaintingById(paintingId);
+        if (!painting) {
+            bot.sendMessage(chatId, 
+                `❌ <b>Картина не найдена!</b>\n\n` +
+                `Возможно, она была удалена или ссылка устарела.\n` +
+                `Пожалуйста, выберите другую картину.`,
+                { parse_mode: 'HTML' }
+            );
+            showMainMenu(chatId);
+            return;
+        }
+        
+        // Сразу создаем заказ
+        createOrder(chatId, painting);
+        return;
+    }
+    
     // Обычная обработка параметров
     let paintingId;
     let token = null;
@@ -276,16 +298,39 @@ function showOrderInfo(chatId, order, painting) {
         ]
     };
     
+    // Клавиатура для текстового сообщения (если фото не отправилось)
+    const textKeyboard = {
+        keyboard: [
+            [{ text: '❌ Отменить заказ' }],
+            [{ text: '📋 Мои заказы' }]
+        ],
+        resize_keyboard: true
+    };
+    
+    console.log('📤 ОТПРАВКА ОРДЕРА:', { chatId, orderId: order.id, imagePath });
+    
     // Пытаемся отправить фото
     bot.sendPhoto(chatId, imagePath, { 
         caption: message, 
         parse_mode: 'HTML', 
         reply_markup: keyboard 
-    }).catch(() => {
+    }).then(() => {
+        console.log('✅ ОРДЕР УСПЕШНО ОТПРАВЛЕН:', order.id);
+        // Устанавливаем состояние "заказ создан"
+        setUserState(chatId, 'order_created', { orderId: order.id });
+    }).catch((err) => {
+        console.log('⚠️ ОШИБКА ОТПРАВКИ ФОТО:', err.message);
+        console.log('📤 ПОПЫТКА ОТПРАВИТЬ ТЕКСТОМ...');
         // Если фото не отправилось - текстом
         bot.sendMessage(chatId, message, {
             parse_mode: 'HTML',
-            reply_markup: keyboard
+            reply_markup: textKeyboard
+        }).then(() => {
+            console.log('✅ ОРДЕР ОТПРАВЛЕН ТЕКСТОМ:', order.id);
+            // Устанавливаем состояние "заказ создан"
+            setUserState(chatId, 'order_created', { orderId: order.id });
+        }).catch((err2) => {
+            console.log('❌ ОШИБКА ОТПРАВКИ ТЕКСТА:', err2.message);
         });
     });
 }
@@ -341,6 +386,8 @@ function getStatusText(status) {
 
 // === ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ===
 bot.on('message', (msg) => {
+    console.log('📨 ПОЛУЧЕНО СООБЩЕНИЕ:', JSON.stringify(msg, null, 2));
+    
     if (msg.text === '/start') return; // Уже обработано
     
     const chatId = msg.chat.id;
@@ -348,11 +395,13 @@ bot.on('message', (msg) => {
     
     // Проверяем данные от MiniApp (web_app_data)
     if (msg.web_app_data && msg.web_app_data.data) {
+        console.log('🎯 НАЙДЕНЫ ДАННЫЕ MINIAPP:', msg.web_app_data.data);
         try {
             const data = JSON.parse(msg.web_app_data.data);
-            console.log('📱 Данные от MiniApp:', data);
+            console.log('✅ ДАННЫЕ РАСПАРСЕНЫ:', data);
             
             if (data.action === 'create_order' && data.painting) {
+                console.log('📦 СОЗДАЕМ ЗАКАЗ:', data.painting);
                 const painting = data.painting;
                 const paintingData = findPaintingById(painting.id) || {
                     id: painting.id,
@@ -364,7 +413,7 @@ bot.on('message', (msg) => {
                 return;
             }
         } catch (e) {
-            console.error('Ошибка парсинга данных MiniApp:', e);
+            console.error('❌ ОШИБКА ОБРАБОТКИ web_app_data:', e);
         }
     }
     
@@ -401,6 +450,49 @@ bot.on('message', (msg) => {
     if (session && session.state === 'choosing_painting') {
         const painting = paintings.find(p => text.includes(p.title));
         if (painting) {
+            console.log('🎯 НАЙДЕНА КАРТИНА:', painting.title);
+            setUserState(chatId, 'painting_selected', { paintingId: painting.id });
+            
+            const keyboard = {
+                keyboard: [
+                    [{ text: '💳 Оформить заказ' }],
+                    [{ text: '🎨 Выбрать другую' }],
+                    [{ text: '🔙 Назад' }]
+                ],
+                resize_keyboard: true
+            };
+            
+            const message = 
+                `🎨 <b>${painting.title}</b>\n` +
+                `💰 Цена: <b>${painting.price}₽</b>\n` +
+                `📦 Срок: 2-4 дня\n\n` +
+                `Эта картина создается индивидуально под ваш заказ.`;
+            
+            const imagePath = getPaintingImagePath(painting);
+            console.log('📸 Попытка отправить фото:', imagePath);
+            
+            bot.sendPhoto(chatId, imagePath, { 
+                caption: message, 
+                parse_mode: 'HTML', 
+                reply_markup: keyboard 
+            }).catch((err) => {
+                console.log('⚠️ Ошибка отправки фото, отправляем текстом:', err.message);
+                bot.sendMessage(chatId, message, {
+                    parse_mode: 'HTML',
+                    reply_markup: keyboard
+                });
+            });
+        } else {
+            console.log('❌ Картина не найдена в тексте:', text);
+        }
+        return;
+    }
+    
+    // Альтернативная проверка: если сообщение содержит цену и не обработано выше
+    if (text && text.includes('₽') && !text.includes('🔙')) {
+        const painting = paintings.find(p => text.includes(p.title));
+        if (painting) {
+            console.log('🎯 АЛЬТЕРНАТИВНАЯ ОБРАБОТКА:', painting.title);
             setUserState(chatId, 'painting_selected', { paintingId: painting.id });
             
             const keyboard = {
@@ -430,32 +522,86 @@ bot.on('message', (msg) => {
                     reply_markup: keyboard
                 });
             });
+            return;
         }
-        return;
     }
     
     // Оформление заказа
-    if (session && session.state === 'painting_selected' && text === '💳 Оформить заказ') {
-        const paintingId = session.data.paintingId;
-        const painting = findPaintingById(paintingId);
-        if (painting) {
-            createOrder(chatId, painting);
-            clearUserState(chatId);
+    if (text === '💳 Оформить заказ') {
+        console.log('💳 НАЖАТА КНОПКА ОФОРМЛЕНИЯ, СЕССИЯ:', session);
+        if (session && session.state === 'painting_selected') {
+            const paintingId = session.data.paintingId;
+            const painting = findPaintingById(paintingId);
+            if (painting) {
+                console.log('📦 СОЗДАЕМ ЗАКАЗ:', painting.title);
+                createOrder(chatId, painting);
+                clearUserState(chatId);
+            } else {
+                console.log('❌ Картина не найдена по ID:', paintingId);
+                bot.sendMessage(chatId, '❌ Ошибка: картина не найдена');
+            }
+        } else {
+            console.log('❌ Нет активной сессии или неверный статус');
+            bot.sendMessage(chatId, '❌ Сначала выберите картину через "🎨 Выбрать картину"');
         }
         return;
     }
     
     // Выбрать другую картину
     if (session && session.state === 'painting_selected' && text === '🎨 Выбрать другую') {
+        clearUserState(chatId);
         showPaintingsMenu(chatId);
+        return;
+    }
+    
+    // Отмена заказа (после создания)
+    if (session && session.state === 'order_created' && text === '❌ Отменить заказ') {
+        const orderId = session.data.orderId;
+        
+        db.run(`UPDATE orders SET status = 'cancelled' WHERE id = ? AND user_id = ?`, [orderId, chatId], function(err) {
+            if (err || this.changes === 0) {
+                bot.sendMessage(chatId, '❌ Не удалось отменить заказ. Возможно, он уже обрабатывается.');
+                return;
+            }
+            
+            bot.sendMessage(chatId, 
+                `❌ <b>Заказ #${orderId} отменен!</b>\n\n` +
+                `Если вы передумали, можете создать новый заказ.`,
+                { parse_mode: 'HTML' }
+            );
+            
+            // Уведомляем администратора
+            if (ADMIN_CHAT_ID && ADMIN_CHAT_ID !== 'your_admin_id') {
+                bot.sendMessage(ADMIN_CHAT_ID, 
+                    `❌ <b>Заказ #${orderId} отменен пользователем!</b>\n\n` +
+                    `👤 Пользователь: ${chatId}`,
+                    { parse_mode: 'HTML' }
+                ).catch(() => {});
+            }
+            
+            clearUserState(chatId);
+            showMainMenu(chatId, msg.chat.first_name);
+        });
+        return;
+    }
+    
+    // Назад в главное меню (в других состояниях)
+    if (text === '🔙 Назад') {
+        showMainMenu(chatId, msg.chat.first_name);
         clearUserState(chatId);
         return;
     }
     
-    // Назад в главное меню
-    if (text === '🔙 Назад') {
-        showMainMenu(chatId, msg.chat.first_name);
+    // Сделать новый заказ (из меню моих заказов)
+    if (text === '🎨 Сделать новый заказ') {
+        showPaintingsMenu(chatId);
+        return;
+    }
+    
+    // Выбрать другую картину (после создания заказа)
+    if (session && session.state === 'order_created' && text === '🎨 Выбрать другую') {
         clearUserState(chatId);
+        showPaintingsMenu(chatId);
         return;
     }
 });
@@ -468,7 +614,12 @@ function showPaintingsMenu(chatId) {
     
     keyboard.push([{ text: '🔙 Назад' }]);
     
+    console.log('🎨 УСТАНАВЛИВАЮ СЕССИЮ choosing_painting ДЛЯ:', chatId);
     setUserState(chatId, 'choosing_painting');
+    
+    // Проверяем, что сессия установилась
+    const checkSession = getUserState(chatId);
+    console.log('✅ ПРОВЕРКА СЕССИИ ПОСЛЕ УСТАНОВКИ:', checkSession);
     
     bot.sendMessage(chatId, '🎨 Выберите картину для заказа:', {
         reply_markup: { keyboard, resize_keyboard: true }
@@ -587,8 +738,40 @@ bot.on('callback_query', (callbackQuery) => {
     const data = callbackQuery.data;
     const messageId = callbackQuery.message.message_id;
     
+    console.log('📞 CALLBACK QUERY ПОЛУЧЕН:', {
+        data: data,
+        type: typeof data,
+        from: callbackQuery.from.id,
+        chatId: chatId
+    });
+    
     // Убираем "часики"
     bot.answerCallbackQuery(callbackQuery.id);
+    
+    // Проверяем, является ли data JSON от MiniApp
+    if (data && data.startsWith('{') && data.endsWith('}')) {
+        try {
+            const miniAppData = JSON.parse(data);
+            console.log('✅ ДАННЫЕ MINIAPP РАСПАРСЕНЫ:', miniAppData);
+            
+            if (miniAppData.action === 'create_order' && miniAppData.painting) {
+                console.log('📦 СОЗДАЕМ ЗАКАЗ ИЗ MINIAPP:', miniAppData.painting);
+                
+                const painting = miniAppData.painting;
+                const paintingData = findPaintingById(painting.id) || {
+                    id: painting.id,
+                    title: painting.title,
+                    category: painting.category,
+                    price: painting.price
+                };
+                
+                createOrder(chatId, paintingData, null);
+                return;
+            }
+        } catch (e) {
+            console.error('❌ ОШИБКА ПАРСИНГА JSON:', e);
+        }
+    }
     
     // Кнопка "✅ Оплатил(а)"
     if (data.startsWith('paid_')) {
