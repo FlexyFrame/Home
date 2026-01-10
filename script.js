@@ -1092,6 +1092,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Закрытие модальных окон по клику на фон
         const viewModal = document.getElementById('viewModal');
         const fullscreenGallery = document.getElementById('fullscreenGallery');
+        const galleryOverlay = document.getElementById('galleryOverlay');
         
         if (viewModal) {
             viewModal.addEventListener('click', (e) => {
@@ -1100,11 +1101,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         if (fullscreenGallery) {
+            // Клик на фон
             fullscreenGallery.addEventListener('click', (e) => {
-                if (e.target === fullscreenGallery || e.target.classList.contains('gallery-overlay')) {
+                if (e.target === fullscreenGallery || e.target === galleryOverlay) {
                     closeFullscreenGallery();
                 }
             });
+            
+            // Клик на кнопку закрытия
+            const closeBtn = fullscreenGallery.querySelector('.gallery-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeFullscreenGallery();
+                });
+            }
+        }
+        
+        // Дополнительно: клик на overlay
+        if (galleryOverlay) {
+            galleryOverlay.addEventListener('click', closeFullscreenGallery);
         }
         
         // Предзагрузка первых изображений
