@@ -713,7 +713,11 @@ function closeFullscreenGallery() {
     // Удаляем обработчик клика на кнопку закрытия
     const closeBtn = galleryModal.querySelector('.gallery-close');
     if (closeBtn && closeBtn.dataset.clickHandler) {
-        closeBtn.removeEventListener('click', closeBtn.dataset.clickHandler);
+        try {
+            closeBtn.removeEventListener('click', closeBtn.dataset.clickHandler);
+        } catch (e) {
+            // Игнорируем ошибки удаления обработчика
+        }
         delete closeBtn.dataset.clickHandler;
     }
     
