@@ -458,6 +458,7 @@ function selectPainting(id) {
 
 // === МОДАЛЬНОЕ ОКНО ПРОСМОТРА ===
 let isModalOpen = false;
+let viewModalKeyHandler = null; // Глобальная переменная для хранения обработчика
 
 function showViewModal(painting) {
     if (isModalOpen) return;
@@ -581,6 +582,21 @@ function showViewModal(painting) {
     modal.setAttribute('role', 'dialog');
     modal.setAttribute('aria-labelledby', 'modal-title');
     
+    // Удаляем старый обработчик если был
+    if (viewModalKeyHandler) {
+        document.removeEventListener('keydown', viewModalKeyHandler);
+    }
+    
+    // Обработчик клавиатуры для ESC
+    viewModalKeyHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeViewModal();
+        }
+    };
+    
+    // Добавляем новый обработчик
+    document.addEventListener('keydown', viewModalKeyHandler);
+    
     // Сбрасываем флаг после анимации
     setTimeout(() => {
         isModalOpen = false;
@@ -598,6 +614,12 @@ function closeViewModal() {
     modal.removeAttribute('aria-modal');
     modal.removeAttribute('role');
     modal.removeAttribute('aria-labelledby');
+    
+    // Удаляем обработчик клавиатуры
+    if (viewModalKeyHandler) {
+        document.removeEventListener('keydown', viewModalKeyHandler);
+        viewModalKeyHandler = null;
+    }
     
     // Снимаем выделение только если не переходим в полноэкранный режим или к заказу
     const galleryModal = document.getElementById('fullscreenGallery');
