@@ -983,7 +983,7 @@ function setupHeaderScroll() {
         lastScroll = currentScroll;
     };
     
-    // Добавляем стили для плавных переходов
+    // Добавляем стили для плавных переходов для всех элементов
     if (logo) {
         logo.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
         logo.style.willChange = 'opacity, transform';
@@ -994,8 +994,8 @@ function setupHeaderScroll() {
         nav.style.willChange = 'opacity, transform';
     }
     
-    // Для MiniApp добавляем transition к header
-    if (window.Telegram && window.Telegram.WebApp && header) {
+    // Добавляем transition к header для плавного скрытия/появления
+    if (header) {
         header.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
         header.style.willChange = 'transform, opacity';
     }
