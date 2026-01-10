@@ -763,18 +763,28 @@ async function proceedToOrder() {
             // Показываем уведомление пользователю
             Notifications.success('✅ Заказ создан! Открываю бота...');
             
-            // Закрываем MiniApp через 1 секунду
-            setTimeout(() => {
-                window.Telegram.WebApp.close();
-            }, 1000);
-            
-            // Отправляем данные в бот (если поддерживается)
+            // Попытка отправить данные и закрыть MiniApp
             try {
+                Logger.info('Попытка отправки данных через sendData...');
                 window.Telegram.WebApp.sendData(JSON.stringify(orderData));
+                Logger.info('sendData выполнен успешно');
             } catch (e) {
-                // sendData может не работать в некоторых версиях - это нормально
-                Logger.warn('sendData не поддерживается, используем close()');
+                Logger.error('Ошибка sendData:', e.message);
+                Logger.warn('sendData не поддерживается или ошибка');
             }
+            
+            // Закрываем MiniApp через короткую задержку
+            setTimeout(() => {
+                try {
+                    Logger.info('Попытка закрыть MiniApp...');
+                    window.Telegram.WebApp.close();
+                    Logger.info('close() выполнен успешно');
+                } catch (e) {
+                    Logger.error('Ошибка close():', e.message);
+                    // Показываем пользователю ошибку
+                    Notifications.error('Не удалось закрыть MiniApp: ' + e.message);
+                }
+            }, 100);
             
         } else {
             Logger.info('Обычный режим: открываем Telegram с quick order');
