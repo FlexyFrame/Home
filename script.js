@@ -965,80 +965,79 @@ function setupHeaderScroll() {
         
         console.log('Scroll:', currentScroll, 'Mobile:', isMobileView, 'MiniApp:', isTelegramMiniApp);
         
-        if (isMobileView) {
-            // На мобильных: скрываем логотип и навигацию при прокрутке вниз
-            if (currentScroll > lastScroll && currentScroll > 30) {
-                // Прокрутка вниз - скрываем
+        if (isTelegramMiniApp) {
+            // В MiniApp: скрываем ВЕСЬ header полностью
+            if (currentScroll > 30) {
+                header.style.transform = 'translateY(-100%)';
+                header.style.opacity = '0';
+                header.style.pointerEvents = 'none';
+                console.log('📱 MiniApp: Скрываем header полностью');
+            } else {
+                header.style.transform = 'translateY(0)';
+                header.style.opacity = '1';
+                header.style.pointerEvents = 'auto';
+                console.log('📱 MiniApp: Показываем header');
+            }
+        } else if (isMobileView) {
+            // На мобильной версии сайта: скрываем только логотип и навигацию
+            if (currentScroll > 30) {
+                // Скрываем содержимое
                 if (logo) {
                     logo.style.opacity = '0';
                     logo.style.transform = 'translateY(-20px)';
                     logo.style.pointerEvents = 'none';
-                    console.log('📱 Скрываем логотип');
+                    console.log('📱 Мобильная: Скрываем логотип');
                 }
                 if (nav) {
                     nav.style.opacity = '0';
                     nav.style.transform = 'translateY(-20px)';
                     nav.style.pointerEvents = 'none';
-                    console.log('📱 Скрываем навигацию');
+                    console.log('📱 Мобильная: Скрываем навигацию');
                 }
-                
-                // В MiniApp дополнительно скрываем весь header
-                if (isTelegramMiniApp && header) {
-                    header.style.transform = 'translateY(-100%)';
-                    header.style.opacity = '0';
-                    console.log('📱 MiniApp: Скрываем header полностью');
-                }
-            } else if (currentScroll < lastScroll || currentScroll < 30) {
-                // Прокрутка вверх или вверху - показываем
+            } else {
+                // Показываем содержимое
                 if (logo) {
                     logo.style.opacity = '1';
                     logo.style.transform = 'translateY(0)';
                     logo.style.pointerEvents = 'auto';
-                    console.log('📱 Показываем логотип');
+                    console.log('📱 Мобильная: Показываем логотип');
                 }
                 if (nav) {
                     nav.style.opacity = '1';
                     nav.style.transform = 'translateY(0)';
                     nav.style.pointerEvents = 'auto';
-                    console.log('📱 Показываем навигацию');
-                }
-                
-                // В MiniApp показываем весь header
-                if (isTelegramMiniApp && header) {
-                    header.style.transform = 'translateY(0)';
-                    header.style.opacity = '1';
-                    console.log('📱 MiniApp: Показываем header полностью');
+                    console.log('📱 Мобильная: Показываем навигацию');
                 }
             }
         } else {
             // На десктопе: скрываем только логотип и навигацию, header остается видимым
             if (currentScroll > 50) {
-                // При прокрутке вниз - скрываем содержимое header
+                // Скрываем содержимое header
                 if (logo) {
                     logo.style.opacity = '0';
                     logo.style.transform = 'translateY(-20px)';
                     logo.style.pointerEvents = 'none';
-                    console.log('🖥️ Скрываем логотип');
+                    console.log('🖥️ Десктоп: Скрываем логотип');
                 }
                 if (nav) {
                     nav.style.opacity = '0';
                     nav.style.transform = 'translateY(-20px)';
                     nav.style.pointerEvents = 'none';
-                    console.log('🖥️ Скрываем навигацию');
+                    console.log('🖥️ Десктоп: Скрываем навигацию');
                 }
             } else {
-                // В самом верху - показываем содержимое header
+                // Показываем содержимое header
                 if (logo) {
                     logo.style.opacity = '1';
                     logo.style.transform = 'translateY(0)';
                     logo.style.pointerEvents = 'auto';
-                    console.log('🖥️ Показываем логотип');
+                    console.log('🖥️ Десктоп: Показываем логотип');
                 }
                 if (nav) {
                     nav.style.opacity = '1';
                     nav.style.transform = 'translateY(0)';
                     nav.style.pointerEvents = 'auto';
-                    console.log('🖥️ Показываем навигацию');
+                    console.log('🖥️ Десктоп: Показываем навигацию');
                 }
             }
         }
@@ -1070,7 +1069,7 @@ function setupHeaderScroll() {
     window.addEventListener('resize', () => {
         console.log('Resize:', window.innerWidth);
         // Сбрасываем стили при изменении размера
-        if (!isMobile()) {
+        if (!isMobile() && !isMiniApp()) {
             if (logo) {
                 logo.style.opacity = '1';
                 logo.style.transform = '';
@@ -1082,6 +1081,7 @@ function setupHeaderScroll() {
             if (header) {
                 header.style.transform = '';
                 header.style.opacity = '';
+                header.style.pointerEvents = '';
             }
         }
     });
