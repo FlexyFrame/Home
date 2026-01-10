@@ -941,12 +941,18 @@ function setupHeaderScroll() {
     // Проверяем, мобильная ли версия
     const isMobile = () => window.innerWidth <= 768;
     
+    // Проверяем, MiniApp ли это
+    const isMiniApp = () => {
+        return window.Telegram && window.Telegram.WebApp;
+    };
+    
     // Обработчик прокрутки
     const handleScroll = () => {
         const currentScroll = window.scrollY;
         const isMobileView = isMobile();
+        const isTelegramMiniApp = isMiniApp();
         
-        console.log('Scroll:', currentScroll, 'Mobile:', isMobileView);
+        console.log('Scroll:', currentScroll, 'Mobile:', isMobileView, 'MiniApp:', isTelegramMiniApp);
         
         if (isMobileView) {
             // На мобильных: скрываем логотип и навигацию при прокрутке вниз
@@ -962,6 +968,13 @@ function setupHeaderScroll() {
                     nav.style.transform = 'translateY(-20px)';
                     console.log('📱 Скрываем навигацию');
                 }
+                
+                // В MiniApp дополнительно скрываем весь header
+                if (isTelegramMiniApp && header) {
+                    header.style.transform = 'translateY(-100%)';
+                    header.style.opacity = '0';
+                    console.log('📱 MiniApp: Скрываем header полностью');
+                }
             } else if (currentScroll < lastScroll || currentScroll < 100) {
                 // Прокрутка вверх или вверху - показываем
                 if (logo) {
@@ -973,6 +986,13 @@ function setupHeaderScroll() {
                     nav.style.opacity = '1';
                     nav.style.transform = 'translateY(0)';
                     console.log('📱 Показываем навигацию');
+                }
+                
+                // В MiniApp показываем весь header
+                if (isTelegramMiniApp && header) {
+                    header.style.transform = 'translateY(0)';
+                    header.style.opacity = '1';
+                    console.log('📱 MiniApp: Показываем header полностью');
                 }
             }
         } else {
@@ -1000,6 +1020,12 @@ function setupHeaderScroll() {
         nav.style.willChange = 'opacity, transform';
     }
     
+    // Для MiniApp добавляем transition к header
+    if (window.Telegram && window.Telegram.WebApp && header) {
+        header.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+        header.style.willChange = 'transform, opacity';
+    }
+    
     // Подписываемся на событие прокрутки
     window.addEventListener('scroll', handleScroll, { passive: true });
     
@@ -1015,6 +1041,10 @@ function setupHeaderScroll() {
             if (nav) {
                 nav.style.opacity = '1';
                 nav.style.transform = '';
+            }
+            if (header) {
+                header.style.transform = '';
+                header.style.opacity = '';
             }
         }
     });
