@@ -877,9 +877,33 @@ function createSupportTicket(orderId, userId, paintingTitle) {
                 `🎫 <b>Создан тикет поддержки #${ticketId}</b>\n\n` +
                 `💬 Теперь вы можете общаться с нашей командой по поводу заказа #${orderId}\n` +
                 `🎨 ${paintingTitle}\n\n` +
-                `Просто отправляйте сообщения сюда, и мы ответим вам!`,
+                `Для общения используйте бота поддержки: @FlexyFrameSupportBot\n` +
+                `Отправьте /start и выберите тикет #${ticketId}`,
                 { parse_mode: 'HTML' }
             ).catch(() => {});
+
+            // Уведомляем администратора через support_bot (если он запущен)
+            const supportBotToken = process.env.SUPPORT_BOT_TOKEN;
+            if (supportBotToken && ADMIN_CHAT_ID && ADMIN_CHAT_ID !== 'your_admin_id') {
+                const supportBot = new TelegramBot(supportBotToken, { polling: false });
+                
+                // Получаем информацию о пользователе
+                db.get(`SELECT username, first_name FROM users WHERE user_id = ?`, [userId], (err, user) => {
+                    const userName = user ? (user.first_name || user.username || 'Пользователь') : `ID: ${userId}`;
+                    
+                    const adminMessage = 
+                        `🎫 <b>Новый тикет #${ticketId}</b>\n\n` +
+                        `👤 Пользователь: ${userName}\n` +
+                        `🆔 ID: ${userId}\n` +
+                        `🎨 Заказ: #${orderId} - ${paintingTitle}\n\n` +
+                        `💬 Ответьте: #${ticketId} Ваш ответ\n` +
+                        `📋 Просмотр: /tickets`;
+                    
+                    supportBot.sendMessage(ADMIN_CHAT_ID, adminMessage, { parse_mode: 'HTML' })
+                        .then(() => console.log('✅ Уведомление о новом тикете отправлено админу'))
+                        .catch(err => console.log('⚠️ Не удалось отправить уведомление админу:', err.message));
+                });
+            }
         }
     );
 }
