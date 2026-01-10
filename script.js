@@ -678,7 +678,8 @@ function showFullscreenGallery(painting) {
         };
         
         closeBtn.addEventListener('click', closeClickHandler);
-        closeBtn.dataset.clickHandler = 'true';
+        // Сохраняем саму функцию, а не строку
+        closeBtn.dataset.clickHandler = closeClickHandler;
     }
     
     // Обработчик клавиатуры
@@ -707,6 +708,13 @@ function closeFullscreenGallery() {
         document.removeEventListener('keydown', galleryModal.dataset.keyHandlerFunc);
         delete galleryModal.dataset.keyHandlerFunc;
         delete galleryModal.dataset.keyHandler;
+    }
+    
+    // Удаляем обработчик клика на кнопку закрытия
+    const closeBtn = galleryModal.querySelector('.gallery-close');
+    if (closeBtn && closeBtn.dataset.clickHandler) {
+        closeBtn.removeEventListener('click', closeBtn.dataset.clickHandler);
+        delete closeBtn.dataset.clickHandler;
     }
     
     // Скрываем модальное окно
