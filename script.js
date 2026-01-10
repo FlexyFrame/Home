@@ -967,7 +967,7 @@ function setupHeaderScroll() {
         
         if (isMobileView) {
             // На мобильных: скрываем логотип и навигацию при прокрутке вниз
-            if (currentScroll > lastScroll && currentScroll > 50) {
+            if (currentScroll > lastScroll && currentScroll > 30) {
                 // Прокрутка вниз - скрываем
                 if (logo) {
                     logo.style.opacity = '0';
@@ -988,7 +988,7 @@ function setupHeaderScroll() {
                     header.style.opacity = '0';
                     console.log('📱 MiniApp: Скрываем header полностью');
                 }
-            } else if (currentScroll < lastScroll || currentScroll < 50) {
+            } else if (currentScroll < lastScroll || currentScroll < 30) {
                 // Прокрутка вверх или вверху - показываем
                 if (logo) {
                     logo.style.opacity = '1';
@@ -1011,15 +1011,35 @@ function setupHeaderScroll() {
                 }
             }
         } else {
-            // На десктопе: header виден ТОЛЬКО в самом верху страницы
+            // На десктопе: скрываем только логотип и навигацию, header остается видимым
             if (currentScroll > 50) {
-                // При прокрутке вниз - скрываем header
-                header.classList.add('hidden');
-                console.log('🖥️ Скрываем header');
+                // При прокрутке вниз - скрываем содержимое header
+                if (logo) {
+                    logo.style.opacity = '0';
+                    logo.style.transform = 'translateY(-20px)';
+                    logo.style.pointerEvents = 'none';
+                    console.log('🖥️ Скрываем логотип');
+                }
+                if (nav) {
+                    nav.style.opacity = '0';
+                    nav.style.transform = 'translateY(-20px)';
+                    nav.style.pointerEvents = 'none';
+                    console.log('🖥️ Скрываем навигацию');
+                }
             } else {
-                // В самом верху - показываем header
-                header.classList.remove('hidden');
-                console.log('🖥️ Показываем header (вверху страницы)');
+                // В самом верху - показываем содержимое header
+                if (logo) {
+                    logo.style.opacity = '1';
+                    logo.style.transform = 'translateY(0)';
+                    logo.style.pointerEvents = 'auto';
+                    console.log('🖥️ Показываем логотип');
+                }
+                if (nav) {
+                    nav.style.opacity = '1';
+                    nav.style.transform = 'translateY(0)';
+                    nav.style.pointerEvents = 'auto';
+                    console.log('🖥️ Показываем навигацию');
+                }
             }
         }
         
