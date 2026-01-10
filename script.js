@@ -616,6 +616,8 @@ function closeViewModal() {
 }
 
 // === ПОЛНОЭКРАННАЯ ГАЛЕРЕЯ ===
+let fullscreenKeyHandler = null; // Глобальная переменная для хранения обработчика
+
 function showFullscreenGallery(painting) {
     const galleryModal = document.getElementById('fullscreenGallery');
     const galleryImage = document.getElementById('fullscreenImage');
@@ -662,16 +664,20 @@ function showFullscreenGallery(painting) {
         if (closeBtn) closeBtn.focus();
     }, 100);
     
+    // Удаляем старый обработчик если был
+    if (fullscreenKeyHandler) {
+        document.removeEventListener('keydown', fullscreenKeyHandler);
+    }
+    
     // Обработчик клавиатуры
-    const keyHandler = (e) => {
+    fullscreenKeyHandler = (e) => {
         if (e.key === 'Escape') {
             closeFullscreenGallery();
         }
     };
     
-    // Сохраняем обработчик для удаления
-    document.addEventListener('keydown', keyHandler);
-    galleryModal.dataset.keyHandlerFunc = keyHandler;
+    // Добавляем новый обработчик
+    document.addEventListener('keydown', fullscreenKeyHandler);
 }
 
 function closeFullscreenGallery() {
@@ -683,9 +689,9 @@ function closeFullscreenGallery() {
     if (!galleryModal || !galleryOverlay) return;
     
     // Удаляем обработчик клавиатуры
-    if (galleryModal.dataset.keyHandlerFunc) {
-        document.removeEventListener('keydown', galleryModal.dataset.keyHandlerFunc);
-        delete galleryModal.dataset.keyHandlerFunc;
+    if (fullscreenKeyHandler) {
+        document.removeEventListener('keydown', fullscreenKeyHandler);
+        fullscreenKeyHandler = null;
     }
     
     // Скрываем модальное окно
