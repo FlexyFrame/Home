@@ -1007,13 +1007,15 @@ function setupHeaderScroll() {
                 }
             }
         } else {
-            // На десктопе: скрываем весь header при прокрутке вниз
-            if (currentScroll > lastScroll && currentScroll > 100) {
+            // На десктопе: header виден ТОЛЬКО в самом верху страницы
+            if (currentScroll > 50) {
+                // При прокрутке вниз - скрываем header
                 header.classList.add('hidden');
                 console.log('🖥️ Скрываем header');
-            } else if (currentScroll < lastScroll || currentScroll < 100) {
+            } else {
+                // В самом верху - показываем header
                 header.classList.remove('hidden');
-                console.log('🖥️ Показываем header');
+                console.log('🖥️ Показываем header (вверху страницы)');
             }
         }
         
