@@ -965,81 +965,19 @@ function setupHeaderScroll() {
         
         console.log('Scroll:', currentScroll, 'Mobile:', isMobileView, 'MiniApp:', isTelegramMiniApp);
         
-        if (isTelegramMiniApp) {
-            // В MiniApp: скрываем ВЕСЬ header полностью
-            if (currentScroll > 30) {
-                header.style.transform = 'translateY(-100%)';
-                header.style.opacity = '0';
-                header.style.pointerEvents = 'none';
-                console.log('📱 MiniApp: Скрываем header полностью');
-            } else {
-                header.style.transform = 'translateY(0)';
-                header.style.opacity = '1';
-                header.style.pointerEvents = 'auto';
-                console.log('📱 MiniApp: Показываем header');
-            }
-        } else if (isMobileView) {
-            // На мобильной версии сайта: скрываем только логотип и навигацию
-            if (currentScroll > 30) {
-                // Скрываем содержимое
-                if (logo) {
-                    logo.style.opacity = '0';
-                    logo.style.transform = 'translateY(-20px)';
-                    logo.style.pointerEvents = 'none';
-                    console.log('📱 Мобильная: Скрываем логотип');
-                }
-                if (nav) {
-                    nav.style.opacity = '0';
-                    nav.style.transform = 'translateY(-20px)';
-                    nav.style.pointerEvents = 'none';
-                    console.log('📱 Мобильная: Скрываем навигацию');
-                }
-            } else {
-                // Показываем содержимое
-                if (logo) {
-                    logo.style.opacity = '1';
-                    logo.style.transform = 'translateY(0)';
-                    logo.style.pointerEvents = 'auto';
-                    console.log('📱 Мобильная: Показываем логотип');
-                }
-                if (nav) {
-                    nav.style.opacity = '1';
-                    nav.style.transform = 'translateY(0)';
-                    nav.style.pointerEvents = 'auto';
-                    console.log('📱 Мобильная: Показываем навигацию');
-                }
-            }
+        // Во всех версиях: скрываем header полностью при прокрутке вниз
+        if (currentScroll > 30) {
+            // Скрываем header полностью
+            header.style.transform = 'translateY(-100%)';
+            header.style.opacity = '0';
+            header.style.pointerEvents = 'none';
+            console.log('📱 Скрываем header полностью');
         } else {
-            // На десктопе: скрываем только логотип и навигацию, header остается видимым
-            if (currentScroll > 50) {
-                // Скрываем содержимое header
-                if (logo) {
-                    logo.style.opacity = '0';
-                    logo.style.transform = 'translateY(-20px)';
-                    logo.style.pointerEvents = 'none';
-                    console.log('🖥️ Десктоп: Скрываем логотип');
-                }
-                if (nav) {
-                    nav.style.opacity = '0';
-                    nav.style.transform = 'translateY(-20px)';
-                    nav.style.pointerEvents = 'none';
-                    console.log('🖥️ Десктоп: Скрываем навигацию');
-                }
-            } else {
-                // Показываем содержимое header
-                if (logo) {
-                    logo.style.opacity = '1';
-                    logo.style.transform = 'translateY(0)';
-                    logo.style.pointerEvents = 'auto';
-                    console.log('🖥️ Десктоп: Показываем логотип');
-                }
-                if (nav) {
-                    nav.style.opacity = '1';
-                    nav.style.transform = 'translateY(0)';
-                    nav.style.pointerEvents = 'auto';
-                    console.log('🖥️ Десктоп: Показываем навигацию');
-                }
-            }
+            // Показываем header
+            header.style.transform = 'translateY(0)';
+            header.style.opacity = '1';
+            header.style.pointerEvents = 'auto';
+            console.log('📱 Показываем header');
         }
         
         lastScroll = currentScroll;
