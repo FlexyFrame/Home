@@ -658,11 +658,12 @@ function showFullscreenGallery(painting) {
     galleryModal.setAttribute('role', 'dialog');
     galleryModal.setAttribute('aria-label', `Полноэкранное просмотра: ${painting.title}`);
     
-    // Управление фокусом
-    setTimeout(() => {
-        const closeBtn = galleryModal.querySelector('.gallery-close');
-        if (closeBtn) closeBtn.focus();
-    }, 100);
+    // Назначаем обработчик для кнопки закрытия
+    const closeBtn = galleryModal.querySelector('.gallery-close');
+    if (closeBtn) {
+        closeBtn.onclick = () => closeFullscreenGallery();
+        setTimeout(() => closeBtn.focus(), 100);
+    }
     
     // Удаляем старый обработчик если был
     if (fullscreenKeyHandler) {
