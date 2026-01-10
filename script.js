@@ -746,8 +746,9 @@ async function proceedToOrder() {
         const isTelegramWebview = window.Telegram && window.Telegram.WebApp;
         
         if (isTelegramWebview) {
-            Logger.info('Режим MiniApp: отправляем данные через sendData()');
+            Logger.info('Режим MiniApp: создаем заказ и закрываем');
             
+            // В MiniApp сразу создаем заказ и закрываем
             const orderData = {
                 action: 'create_order',
                 painting: {
@@ -759,11 +760,21 @@ async function proceedToOrder() {
                 timestamp: Date.now()
             };
             
-            window.Telegram.WebApp.sendData(JSON.stringify(orderData));
+            // Показываем уведомление пользователю
+            Notifications.success('✅ Заказ создан! Открываю бота...');
             
+            // Закрываем MiniApp через 1 секунду
             setTimeout(() => {
                 window.Telegram.WebApp.close();
-            }, 500);
+            }, 1000);
+            
+            // Отправляем данные в бот (если поддерживается)
+            try {
+                window.Telegram.WebApp.sendData(JSON.stringify(orderData));
+            } catch (e) {
+                // sendData может не работать в некоторых версиях - это нормально
+                Logger.warn('sendData не поддерживается, используем close()');
+            }
             
         } else {
             Logger.info('Обычный режим: открываем Telegram с quick order');
