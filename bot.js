@@ -312,8 +312,7 @@ function showOrderInfo(chatId, order, painting) {
     
     const keyboard = {
         inline_keyboard: [
-            [{ text: '✅ Оплатил(а)', callback_data: `paid_${order.id}` }],
-            [{ text: '📋 Мои заказы', callback_data: 'my_orders' }]
+            [{ text: '✅ Оплатил(а)', callback_data: `paid_${order.id}` }]
         ]
     };
     
@@ -825,6 +824,9 @@ bot.on('callback_query', (callbackQuery) => {
         
         console.log('📞 ОБРАБОТКА ОПЛАТЫ:', { orderId, chatId, data });
         
+        // Получаем ID пользователя из callback_query
+        const userId = callbackQuery.from.id;
+        
         db.get(`SELECT * FROM orders WHERE id = ?`, [orderId], (err, order) => {
             if (err) {
                 console.log('❌ Ошибка запроса заказа:', err.message);
@@ -839,9 +841,11 @@ bot.on('callback_query', (callbackQuery) => {
             }
             
             console.log('✅ Заказ найден:', order);
+            console.log('✅ Проверка пользователя:', { orderUser: order.user_id, userId, chatId });
             
-            if (order.user_id !== chatId) {
-                console.log('❌ Несоответствие пользователя:', { orderUser: order.user_id, chatId });
+            // Проверяем по user_id из callback_query
+            if (order.user_id !== userId) {
+                console.log('❌ Несоответствие пользователя:', { orderUser: order.user_id, userId });
                 bot.sendMessage(chatId, '❌ Заказ не принадлежит вам.');
                 return;
             }
@@ -872,7 +876,7 @@ bot.on('callback_query', (callbackQuery) => {
                 );
                 
                 // Уведомляем администратора
-                notifyAdminPayment(orderId, chatId, order);
+                notifyAdminPayment(orderId, userId, order);
             });
         });
     }
