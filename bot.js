@@ -302,9 +302,9 @@ function showOrderInfo(chatId, order, painting) {
         `📦 Срок выполнения: 2-4 дня\n` +
         `📊 Статус: ${getStatusEmoji(order.status)} ${getStatusText(order.status)}\n\n` +
         `💳 <b>Для оплаты:</b>\n` +
-        `• Нажмите "💳 Оплатить онлайн"\n` +
-        `• Заполните данные карты\n` +
-        `• В комментарии указан ваш заказ\n\n` +
+        `• Оплатите по реквизитам ЮMoney\n` +
+        `• В комментарии укажите: Заказ #${order.id}\n` +
+        `• Сумма: ${painting.price}₽\n\n` +
         `⚠️ <b>Важно!</b> После оплаты нажмите "✅ Оплатил(а)".\n` +
         `📦 Мы начнем работу сразу после подтверждения.\n\n` +
         `📞 Вопросы: @flexyframe_bot_admin\n` +
@@ -312,7 +312,6 @@ function showOrderInfo(chatId, order, painting) {
     
     const keyboard = {
         inline_keyboard: [
-            [{ text: '💳 Оплатить онлайн', url: paymentLink }],
             [{ text: '✅ Оплатил(а)', callback_data: `paid_${order.id}` }],
             [{ text: '📋 Мои заказы', callback_data: 'my_orders' }]
         ]
@@ -824,31 +823,57 @@ bot.on('callback_query', (callbackQuery) => {
     if (data.startsWith('paid_')) {
         const orderId = parseInt(data.replace('paid_', ''));
         
-        db.get(`SELECT * FROM orders WHERE id = ? AND user_id = ?`, [orderId, chatId], (err, order) => {
-            if (err || !order) {
-                bot.sendMessage(chatId, '❌ Заказ не найден или не принадлежит вам.');
+        console.log('📞 ОБРАБОТКА ОПЛАТЫ:', { orderId, chatId, data });
+        
+        db.get(`SELECT * FROM orders WHERE id = ?`, [orderId], (err, order) => {
+            if (err) {
+                console.log('❌ Ошибка запроса заказа:', err.message);
+                bot.sendMessage(chatId, '❌ Произошла ошибка при проверке заказа.');
+                return;
+            }
+            
+            if (!order) {
+                console.log('❌ Заказ не найден:', orderId);
+                bot.sendMessage(chatId, '❌ Заказ не найден.');
+                return;
+            }
+            
+            console.log('✅ Заказ найден:', order);
+            
+            if (order.user_id !== chatId) {
+                console.log('❌ Несоответствие пользователя:', { orderUser: order.user_id, chatId });
+                bot.sendMessage(chatId, '❌ Заказ не принадлежит вам.');
                 return;
             }
             
             if (order.status === 'paid') {
+                console.log('⚠️ Заказ уже оплачен:', orderId);
                 bot.sendMessage(chatId, `✅ Заказ #${orderId} уже оплачен и в работе!`);
                 return;
             }
             
             // Обновляем статус
-            db.run(`UPDATE orders SET status = 'paid' WHERE id = ?`, [orderId]);
-            
-            // Отправляем подтверждение
-            bot.sendMessage(chatId, 
-                `✅ <b>Заказ #${orderId} оплачен!</b>\n\n` +
-                `Мы получили подтверждение и начали работу.\n` +
-                `Срок выполнения: 2-4 дня.\n\n` +
-                `📞 Следить за статусом можно в разделе "Мои заказы".`,
-                { parse_mode: 'HTML' }
-            );
-            
-            // Уведомляем администратора
-            notifyAdminPayment(orderId, chatId, order);
+            db.run(`UPDATE orders SET status = 'paid' WHERE id = ?`, [orderId], function(err) {
+                if (err) {
+                    console.log('❌ Ошибка обновления статуса:', err.message);
+                    bot.sendMessage(chatId, '❌ Ошибка при обновлении статуса.');
+                    return;
+                }
+                
+                console.log('✅ Статус обновлен, changes:', this.changes);
+                
+                // Отправляем подтверждение
+                bot.sendMessage(chatId, 
+                    `✅ <b>Заказ #${orderId} оплачен!</b>\n\n` +
+                    `Мы получили подтверждение и начали работу.\n` +
+                    `Срок выполнения: 2-4 дня.\n\n` +
+                    `📞 Следить за статусом можно в разделе "Мои заказы".`,
+                    { parse_mode: 'HTML' }
+                );
+                
+                // Уведомляем администратора
+                notifyAdminPayment(orderId, chatId, order);
+            });
         });
     }
     
