@@ -6,18 +6,27 @@
   "scripts": {
     "start": "node bot.js",
     "dev": "node bot.js",
+    "support": "node support_bot.js",
+    "both": "concurrently \"npm run start\" \"npm run support\"",
     "test": "node test_bot.js && node test_web.js",
     "test:bot": "node test_bot.js",
     "test:web": "node test_web.js"
   },
   "dependencies": {
-    "node-telegram-bot-api": "^0.64.0",
-    "express": "^4.18.2",
-    "sqlite3": "^5.1.6",
     "axios": "^1.6.0",
-    "dotenv": "^16.3.1"
+    "concurrently": "^9.2.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-telegram-bot-api": "^0.64.0",
+    "sqlite3": "^5.1.6"
   },
-  "keywords": ["telegram", "bot", "art", "grafitti", "shop"],
+  "keywords": [
+    "telegram",
+    "bot",
+    "art",
+    "grafitti",
+    "shop"
+  ],
   "author": "FlexyFrame",
   "license": "MIT"
 }

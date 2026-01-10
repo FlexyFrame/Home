@@ -68,6 +68,26 @@ function initDB() {
             data TEXT,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
+        
+        // Таблица тикетов поддержки
+        db.run(`CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            order_id INTEGER,
+            status TEXT DEFAULT 'open',
+            chat_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            closed_at DATETIME
+        )`);
+        
+        // Таблица сообщений тикетов
+        db.run(`CREATE TABLE IF NOT EXISTS ticket_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticket_id INTEGER,
+            from_user INTEGER,
+            message TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
     });
 }
 
@@ -466,6 +486,13 @@ bot.on('message', (msg) => {
         return;
     }
     
+    // Обработка кнопки "Назад" ВЫШЕ всех остальных проверок
+    if (text === '🔙 Назад') {
+        showMainMenu(chatId, msg.chat.first_name);
+        clearUserState(chatId);
+        return;
+    }
+    
     // Выбор картины из меню
     if (session && session.state === 'choosing_painting') {
         const painting = paintings.find(p => text.includes(p.title));
@@ -711,7 +738,7 @@ function showAbout(chatId) {
         `• Превратить фотографию в музейный экспонат\n\n` +
         `📩 <b>Контакты:</b>\n` +
         `• Telegram: @flexyframe_bot\n` +
-        `• Email: art@flexyframe.ru\n\n` +
+        `• Email: designstudioflexyframe@gmail.com\n\n` +
         `🔗 <b>Сайт:</b> ${SITE_URL}/index.html\n\n` +
         `💡 <i>FlexyFrame — это не просто картина. Это история, подсвеченная вашим вкусом.</i>`;
     
@@ -831,6 +858,32 @@ bot.on('callback_query', (callbackQuery) => {
     }
 });
 
+// === СОЗДАНИЕ ТИКЕТА ПОДДЕРЖКИ ===
+function createSupportTicket(orderId, userId, paintingTitle) {
+    db.run(
+        `INSERT INTO tickets (user_id, order_id, status) VALUES (?, ?, 'open')`,
+        [userId, orderId],
+        function(err) {
+            if (err) {
+                console.error('❌ Ошибка создания тикета:', err);
+                return;
+            }
+            
+            const ticketId = this.lastID;
+            console.log(`✅ Тикет #${ticketId} создан для заказа #${orderId}`);
+            
+            // Отправляем уведомление пользователю
+            bot.sendMessage(userId, 
+                `🎫 <b>Создан тикет поддержки #${ticketId}</b>\n\n` +
+                `💬 Теперь вы можете общаться с нашей командой по поводу заказа #${orderId}\n` +
+                `🎨 ${paintingTitle}\n\n` +
+                `Просто отправляйте сообщения сюда, и мы ответим вам!`,
+                { parse_mode: 'HTML' }
+            ).catch(() => {});
+        }
+    );
+}
+
 // === УВЕДОМЛЕНИЕ ОБ ОПЛАТЕ ===
 function notifyAdminPayment(orderId, chatId, order) {
     const adminToken = process.env.ADMIN_BOT_TOKEN;
@@ -859,13 +912,18 @@ function notifyAdminPayment(orderId, chatId, order) {
             `🆔 ID: ${chatId}\n` +
             `🎨 ${order.painting_title}\n` +
             `💰 ${order.price}₽\n` +
-            `📊 Статус: Оплачен`;
+            `📊 Статус: Оплачен\n\n` +
+            `🎫 Тикет поддержки создан автоматически`;
         
         // Создаем отдельного бота для админ-чата
         const adminBot = new TelegramBot(adminToken, { polling: false });
         
         adminBot.sendMessage(adminChatId, message, { parse_mode: 'HTML' })
-            .then(() => console.log('✅ Уведомление об оплате администратору отправлено'))
+            .then(() => {
+                console.log('✅ Уведомление об оплате администратору отправлено');
+                // Создаем тикет поддержки
+                createSupportTicket(orderId, chatId, order.painting_title);
+            })
             .catch(err => console.log('⚠️ Ошибка отправки уведомления об оплате:', err.message));
     });
 }
