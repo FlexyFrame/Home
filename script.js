@@ -662,6 +662,25 @@ function showFullscreenGallery(painting) {
         if (closeBtn) closeBtn.focus();
     }, 100);
     
+    // Обработчик клика на кнопку закрытия
+    const closeBtn = galleryModal.querySelector('.gallery-close');
+    if (closeBtn) {
+        // Удаляем старый обработчик если был
+        if (closeBtn.dataset.clickHandler) {
+            closeBtn.removeEventListener('click', closeBtn.dataset.clickHandler);
+        }
+        
+        // Добавляем новый обработчик
+        const closeClickHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeFullscreenGallery();
+        };
+        
+        closeBtn.addEventListener('click', closeClickHandler);
+        closeBtn.dataset.clickHandler = 'true';
+    }
+    
     // Обработчик клавиатуры
     const keyHandler = (e) => {
         if (e.key === 'Escape') {
@@ -669,7 +688,7 @@ function showFullscreenGallery(painting) {
         }
     };
     
-    // Сохраняем обработчик для удаления
+    // Сохраняем обработчики для удаления
     galleryModal.dataset.keyHandler = 'true';
     document.addEventListener('keydown', keyHandler);
     galleryModal.dataset.keyHandlerFunc = keyHandler;
