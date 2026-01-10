@@ -1149,6 +1149,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+// === МОДАЛЬНОЕ ОКНО ПОДТВЕРЖДЕНИЯ ===
+function closeConfirmModal() {
+    const modal = document.getElementById('confirmModal');
+    if (modal && modal.classList.contains('visible')) {
+        modal.classList.remove('visible');
+        document.body.style.overflow = 'auto';
+    }
+}
+
 // === ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ HTML ===
 window.FlexyFrame = {
     showPaintingsMenu,
@@ -1159,5 +1168,6 @@ window.FlexyFrame = {
     proceedToOrder,
     closeViewModal,
     closeFullscreenGallery,
-    selectPainting
+    selectPainting,
+    closeConfirmModal
 };
