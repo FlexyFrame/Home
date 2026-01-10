@@ -662,12 +662,6 @@ function showFullscreenGallery(painting) {
         if (closeBtn) closeBtn.focus();
     }, 100);
     
-    // Обработчик клика на кнопку закрытия (аналогично modal-close)
-    const closeBtn = galleryModal.querySelector('.gallery-close');
-    if (closeBtn) {
-        closeBtn.onclick = () => closeFullscreenGallery();
-    }
-    
     // Обработчик клавиатуры
     const keyHandler = (e) => {
         if (e.key === 'Escape') {
