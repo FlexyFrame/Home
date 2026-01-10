@@ -662,24 +662,10 @@ function showFullscreenGallery(painting) {
         if (closeBtn) closeBtn.focus();
     }, 100);
     
-    // Обработчик клика на кнопку закрытия
+    // Обработчик клика на кнопку закрытия (аналогично modal-close)
     const closeBtn = galleryModal.querySelector('.gallery-close');
     if (closeBtn) {
-        // Удаляем старый обработчик если был
-        if (closeBtn.dataset.clickHandler) {
-            closeBtn.removeEventListener('click', closeBtn.dataset.clickHandler);
-        }
-        
-        // Добавляем новый обработчик
-        const closeClickHandler = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            closeFullscreenGallery();
-        };
-        
-        closeBtn.addEventListener('click', closeClickHandler);
-        // Сохраняем саму функцию, а не строку
-        closeBtn.dataset.clickHandler = closeClickHandler;
+        closeBtn.onclick = () => closeFullscreenGallery();
     }
     
     // Обработчик клавиатуры
@@ -689,8 +675,7 @@ function showFullscreenGallery(painting) {
         }
     };
     
-    // Сохраняем обработчики для удаления
-    galleryModal.dataset.keyHandler = 'true';
+    // Сохраняем обработчик для удаления
     document.addEventListener('keydown', keyHandler);
     galleryModal.dataset.keyHandlerFunc = keyHandler;
 }
@@ -707,18 +692,6 @@ function closeFullscreenGallery() {
     if (galleryModal.dataset.keyHandlerFunc) {
         document.removeEventListener('keydown', galleryModal.dataset.keyHandlerFunc);
         delete galleryModal.dataset.keyHandlerFunc;
-        delete galleryModal.dataset.keyHandler;
-    }
-    
-    // Удаляем обработчик клика на кнопку закрытия
-    const closeBtn = galleryModal.querySelector('.gallery-close');
-    if (closeBtn && closeBtn.dataset.clickHandler) {
-        try {
-            closeBtn.removeEventListener('click', closeBtn.dataset.clickHandler);
-        } catch (e) {
-            // Игнорируем ошибки удаления обработчика
-        }
-        delete closeBtn.dataset.clickHandler;
     }
     
     // Скрываем модальное окно
