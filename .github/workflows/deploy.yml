@@ -1,0 +1,64 @@
+name: Deploy FlexyFrame Bot
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '*/5 * * * *'  # Каждые 5 минут проверяем активность бота
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.DEPLOY_TOKEN }}
+          publish_dir: ./
+          keep_files: false
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          publish_branch: gh-pages
+          allow_empty_commit: false
+          force_orphan: false
+          enable_jekyll: false
+          disable_nojekyll: false
+          exclude_assets: .github
+      
+      - name: Keep bot alive
+        run: |
+          # Устанавливаем переменные окружения
+          export TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+          export ADMIN_CHAT_ID=${{ secrets.ADMIN_CHAT_ID }}
+          export YOOKASSA_SHOP_ID=${{ secrets.YOOKASSA_SHOP_ID }}
+          export YOOKASSA_SECRET_KEY=${{ secrets.YOOKASSA_SECRET_KEY }}
+          export SITE_URL=${{ secrets.SITE_URL }}
+          export PORT=3000
+          
+          # Запускаем бота в фоне
+          export NODE_ENV=production
+          nohup node bot.js > bot.log 2>&1 &
+          
+          # Ждем 5 секунд
+          sleep 5
+          
+          # Проверяем статус бота
+          if pgrep -f "node.*bot" > /dev/null; then
+            echo "✅ Бот запущен и работает!"
+            echo "PID: $(pgrep -f 'node.*bot')"
+          else
+            echo "❌ Бот не запущен!"
+            cat bot.log
+            exit 1
+          fi
