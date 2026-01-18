@@ -793,19 +793,34 @@ async function proceedToOrder() {
             // Попытка отправить данные и закрыть MiniApp
             try {
                 Logger.info('Попытка отправки данных через sendData...');
-                window.Telegram.WebApp.sendData(JSON.stringify(orderData));
-                Logger.info('sendData выполнен успешно');
+                if (window.Telegram.WebApp.sendData) {
+                    window.Telegram.WebApp.sendData(JSON.stringify(orderData));
+                    Logger.info('sendData выполнен успешно');
+                } else {
+                    Logger.warn('sendData не поддерживается');
+                    // Альтернативный метод: открыть бота с параметрами
+                    const param = `quick_order_${AppState.selectedPainting.id}`;
+                    const url = `https://t.me/flexyframe_bot?start=${encodeURIComponent(param)}`;
+                    window.open(url, '_blank');
+                }
             } catch (e) {
                 Logger.error('Ошибка sendData:', e.message);
-                Logger.warn('sendData не поддерживается или ошибка');
+                // Альтернативный метод при ошибке
+                const param = `quick_order_${AppState.selectedPainting.id}`;
+                const url = `https://t.me/flexyframe_bot?start=${encodeURIComponent(param)}`;
+                window.open(url, '_blank');
             }
             
             // Закрываем MiniApp через короткую задержку
             setTimeout(() => {
                 try {
                     Logger.info('Попытка закрыть MiniApp...');
-                    window.Telegram.WebApp.close();
-                    Logger.info('close() выполнен успешно');
+                    if (window.Telegram.WebApp.close) {
+                        window.Telegram.WebApp.close();
+                        Logger.info('close() выполнен успешно');
+                    } else {
+                        Logger.warn('close() не поддерживается');
+                    }
                 } catch (e) {
                     Logger.error('Ошибка close():', e.message);
                     // Показываем пользователю ошибку

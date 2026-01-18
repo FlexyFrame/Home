@@ -4,6 +4,7 @@ const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+const YooKassa = require('yookassa');
 require('dotenv').config();
 
 // === КОНФИГУРАЦИЯ ===
@@ -11,6 +12,23 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || 'your_admin_id';
 const SITE_URL = process.env.SITE_URL || 'http://127.0.0.1:8080';
 const PORT = process.env.PORT || 3000;
+
+// === YOOKASSA КОНФИГУРАЦИЯ ===
+const YOOKASSA_SHOP_ID = process.env.YOOKASSA_SHOP_ID;
+const YOOKASSA_SECRET_KEY = process.env.YOOKASSA_SECRET_KEY;
+
+// Инициализация YooKassa (продакшен)
+let yookassa = null;
+if (YOOKASSA_SHOP_ID && YOOKASSA_SECRET_KEY && YOOKASSA_SHOP_ID !== 'your_shop_id') {
+    yookassa = new YooKassa({
+        shopId: YOOKASSA_SHOP_ID,
+        secretKey: YOOKASSA_SECRET_KEY
+    });
+    console.log('✅ YooKassa (продакшен) инициализирована');
+} else {
+    console.log('❌ YooKassa не настроена! Пожалуйста, укажите YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY в .env');
+    console.log('⚠️ Бот не сможет создавать платежи без настройки YooKassa');
+}
 
 // Валидация токена
 if (!TOKEN || TOKEN === 'your_token_here') {
@@ -69,25 +87,6 @@ function initDB() {
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
         
-        // Таблица тикетов поддержки
-        db.run(`CREATE TABLE IF NOT EXISTS tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            order_id INTEGER,
-            status TEXT DEFAULT 'open',
-            chat_id INTEGER,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            closed_at DATETIME
-        )`);
-        
-        // Таблица сообщений тикетов
-        db.run(`CREATE TABLE IF NOT EXISTS ticket_messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticket_id INTEGER,
-            from_user INTEGER,
-            message TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
     });
 }
 
@@ -269,83 +268,159 @@ function handleStartParameter(chatId, param) {
     }
 }
 
-// === СОЗДАНИЕ ЗАКАЗА ===
-function createOrder(chatId, painting, token = null) {
+// === СОЗДАНИЕ ЗАКАЗА С YOOKASSA ===
+async function createOrder(chatId, painting, token = null) {
     const orderToken = token || crypto.randomBytes(8).toString('hex');
     
+    // Создаем заказ в базе данных
     db.run(
         `INSERT INTO orders (user_id, painting_id, painting_title, price, status, token) VALUES (?, ?, ?, ?, 'new', ?)`,
         [chatId, painting.id, painting.title, painting.price, orderToken],
-        function(err) {
+        async function(err) {
             if (err) {
-                console.error('Ошибка создания заказа:', err);
+                console.error('❌ Ошибка создания заказа:', err);
                 bot.sendMessage(chatId, '❌ Произошла ошибка при создании заказа. Попробуйте позже.');
                 return;
             }
             
             const orderId = this.lastID;
-            showOrderInfo(chatId, { id: orderId, ...painting, token: orderToken, status: 'new' }, painting);
+            console.log('✅ Заказ создан в БД, ID:', orderId);
+            
+            // Создаем платеж в YooKassa (если настроена)
+            let paymentUrl = null;
+            
+            if (yookassa) {
+                // Продакшен оплата через YooKassa
+                try {
+                    const payment = await yookassa.createPayment({
+                        amount: {
+                            value: painting.price.toFixed(2),
+                            currency: 'RUB'
+                        },
+                        confirmation: {
+                            type: 'redirect',
+                            return_url: `${SITE_URL}/index.html`
+                        },
+                        capture: true,
+                        description: `Заказ #${orderId} - ${painting.title}`,
+                        metadata: {
+                            order_id: orderId,
+                            user_id: chatId,
+                            painting_id: painting.id
+                        }
+                    });
+                    
+                    paymentUrl = payment.confirmation.confirmation_url;
+                    console.log('✅ Платеж создан:', payment.id, paymentUrl);
+                    
+                    // Сохраняем ID платежа в БД
+                    db.run(`UPDATE orders SET payment_id = ? WHERE id = ?`, [payment.id, orderId]);
+                    
+                } catch (error) {
+                    console.error('❌ Ошибка создания платежа YooKassa:', error);
+                }
+            }
+            
+            showOrderInfo(chatId, { id: orderId, ...painting, token: orderToken, status: 'new' }, painting, paymentUrl);
             notifyAdmin(orderId, chatId, painting, orderToken);
         }
     );
 }
 
 // === ПОКАЗАТЬ ИНФОРМАЦИЮ О ЗАКАЗЕ ===
-function showOrderInfo(chatId, order, painting) {
-    const paymentLink = generatePaymentLink(order.id, painting.title, painting.price);
+function showOrderInfo(chatId, order, painting, paymentUrl = null, paymentSystem = 'yookassa') {
     const imagePath = getPaintingImagePath(painting);
+    const fs = require('fs');
     
-    const message = 
-        `✅ <b>Заказ #${order.id}</b>\n\n` +
+    console.log('📸 ПОДГОТОВКА К ОТПРАВКЕ ФОТО:', {
+        chatId,
+        orderId: order.id,
+        paintingTitle: painting.title,
+        imagePath,
+        fileExists: fs.existsSync(imagePath),
+        paymentSystem
+    });
+    
+    let message = 
+        `✅ <b>Заказ #${order.id} создан!</b>\n\n` +
         `🎨 Картина: <b>${painting.title}</b>\n` +
         `💰 Сумма: <b>${painting.price}₽</b>\n` +
         `📦 Срок выполнения: 2-4 дня\n` +
-        `📊 Статус: ${getStatusEmoji(order.status)} ${getStatusText(order.status)}\n\n` +
-        `💳 <b>Для оплаты:</b>\n` +
-        `• Оплатите по реквизитам ЮMoney\n` +
-        `• В комментарии укажите: Заказ #${order.id}\n` +
-        `• Сумма: ${painting.price}₽\n\n` +
-        `⚠️ <b>Важно!</b> После оплаты нажмите "✅ Оплатил(а)".\n` +
-        `📦 Мы начнем работу сразу после подтверждения.\n\n` +
-        `📞 Вопросы: @flexyframe_bot_admin\n` +
-        `🔑 Токен: <code>${order.token}</code>`;
+        `📊 Статус: ${getStatusEmoji(order.status)} ${getStatusText(order.status)}\n\n`;
     
-    const keyboard = {
-        inline_keyboard: [
-            [{ text: '✅ Оплатил(а)', callback_data: `paid_${order.id}` }]
-        ]
-    };
+    let keyboard;
     
-    // Клавиатура для текстового сообщения (если фото не отправилось)
-    const textKeyboard = {
-        keyboard: [
-            [{ text: '❌ Отменить заказ' }],
-            [{ text: '📋 Мои заказы' }]
-        ],
-        resize_keyboard: true
-    };
+    // ВСЕГДА добавляем кнопки оплаты
+    if (paymentUrl) {
+        if (paymentSystem === 'test_yookassa') {
+            // Тестовая оплата
+            message += `💳 <b>Для ТЕСТОВОЙ оплаты:</b>\n` +
+                       `• Перейдите по ссылке ниже\n` +
+                       `• Оплатите удобным способом\n` +
+                       `• Это тестовый платеж!\n\n` +
+                       `🔑 Токен: <code>${order.token}</code>`;
+            
+            keyboard = {
+                inline_keyboard: [
+                    [{ text: '💳 Тестовая оплата', url: paymentUrl }]
+                ]
+            };
+        } else {
+            // Продакшен оплата
+            message += `💳 <b>Для оплаты:</b>\n` +
+                       `• Перейдите по ссылке ниже\n` +
+                       `• Оплатите удобным способом\n\n` +
+                       `🔑 Токен: <code>${order.token}</code>`;
+            
+            keyboard = {
+                inline_keyboard: [
+                    [{ text: '💳 Оплатить', url: paymentUrl }]
+                ]
+            };
+        }
+    } else {
+        // Нет платежной ссылки (ошибка или демо-режим)
+        message += `⚠️ <b>Оплата недоступна</b>\n\n` +
+                   `Приносим извинения, в данный момент оплата недоступна.\n` +
+                   `Пожалуйста, попробуйте позже или свяжитесь с поддержкой.\n\n` +
+                   `💰 Сумма: ${painting.price}₽\n\n` +
+                   `🔑 Токен: <code>${order.token}</code>`;
+        
+        keyboard = {
+            inline_keyboard: [
+                [{ text: '📋 Мои заказы', callback_data: 'my_orders' }]
+            ]
+        };
+    }
     
-    console.log('📤 ОТПРАВКА ОРДЕРА:', { chatId, orderId: order.id, imagePath });
+    // ВСЕГДА пытаемся отправить фото
+    console.log('📸 ПОПЫТКА ОТПРАВИТЬ ФОТО:', imagePath);
     
-    // Пытаемся отправить фото
     bot.sendPhoto(chatId, imagePath, { 
         caption: message, 
         parse_mode: 'HTML', 
         reply_markup: keyboard 
     }).then(() => {
-        console.log('✅ ОРДЕР УСПЕШНО ОТПРАВЛЕН:', order.id);
-        // Устанавливаем состояние "заказ создан"
+        console.log('✅ ФОТО ОТПРАВЛЕНО:', order.id);
         setUserState(chatId, 'order_created', { orderId: order.id });
     }).catch((err) => {
         console.log('⚠️ ОШИБКА ОТПРАВКИ ФОТО:', err.message);
         console.log('📤 ПОПЫТКА ОТПРАВИТЬ ТЕКСТОМ...');
-        // Если фото не отправилось - текстом
+        
+        // Fallback: если фото не отправилось - текстом
+        const textKeyboard = {
+            keyboard: [
+                [{ text: '❌ Отменить заказ' }],
+                [{ text: '📋 Мои заказы' }]
+            ],
+            resize_keyboard: true
+        };
+        
         bot.sendMessage(chatId, message, {
             parse_mode: 'HTML',
             reply_markup: textKeyboard
         }).then(() => {
             console.log('✅ ОРДЕР ОТПРАВЛЕН ТЕКСТОМ:', order.id);
-            // Устанавливаем состояние "заказ создан"
             setUserState(chatId, 'order_created', { orderId: order.id });
         }).catch((err2) => {
             console.log('❌ ОШИБКА ОТПРАВКИ ТЕКСТА:', err2.message);
@@ -374,10 +449,13 @@ function notifyAdmin(orderId, chatId, painting, token) {
             (user.first_name || user.username || 'Пользователь') : 
             `ID: ${chatId}`;
         
+        const userUsername = user ? user.username : null;
+        
         const message = 
             `🔔 <b>Новый заказ #${orderId}</b>\n\n` +
             `👤 Пользователь: ${userName}\n` +
             `🆔 ID: ${chatId}\n` +
+            (userUsername ? `🔗 Профиль: @${userUsername}\n` : '') +
             `🎨 Картина: ${painting.title}\n` +
             `💰 Сумма: ${painting.price}₽\n` +
             `📊 Статус: Ожидает оплаты\n` +
@@ -389,6 +467,83 @@ function notifyAdmin(orderId, chatId, painting, token) {
         adminBot.sendMessage(adminChatId, message, { parse_mode: 'HTML' })
             .then(() => console.log('✅ Уведомление администратору отправлено'))
             .catch(err => console.log('⚠️ Ошибка отправки админ-уведомления:', err.message));
+    });
+}
+
+// === УВЕДОМЛЕНИЕ АДМИНИСТРАТОРА ОБ ОПЛАТЕ ===
+function notifyAdminPayment(orderId, chatId, order) {
+    const adminToken = process.env.ADMIN_BOT_TOKEN;
+    const adminChatId = process.env.ADMIN_CHAT_ID;
+    
+    if (!adminToken || !adminChatId || adminChatId === 'your_admin_id') {
+        console.log('ℹ️ Админ-бот не настроен, уведомление не отправлено');
+        return;
+    }
+    
+    // Получаем информацию о пользователе из БД
+    db.get(`SELECT username, first_name FROM users WHERE user_id = ?`, [chatId], (err, user) => {
+        if (err) {
+            console.log('⚠️ Ошибка получения данных пользователя:', err.message);
+            return;
+        }
+        
+        const userName = user ? 
+            (user.first_name || user.username || 'Пользователь') : 
+            `ID: ${chatId}`;
+        
+        const userUsername = user ? user.username : null;
+        
+        const message = 
+            `💰 <b>Оплата получена #${orderId}</b>\n\n` +
+            `👤 Пользователь: ${userName}\n` +
+            `🆔 ID: ${chatId}\n` +
+            (userUsername ? `🔗 Профиль: @${userUsername}\n` : '') +
+            `🎨 Картина: ${order.painting_title}\n` +
+            `💰 Сумма: ${order.price}₽\n` +
+            `📊 Статус: Оплачен, в работе`;
+        
+        // Создаем отдельного бота для админ-чата
+        const adminBot = new TelegramBot(adminToken, { polling: false });
+        
+        adminBot.sendMessage(adminChatId, message, { parse_mode: 'HTML' })
+            .then(() => console.log('✅ Уведомление об оплате администратору отправлено'))
+            .catch(err => console.log('⚠️ Ошибка отправки админ-уведомления об оплате:', err.message));
+    });
+}
+
+// === УВЕДОМЛЕНИЕ АДМИНИСТРАТОРА О ВЫБОРЕ КАРТИНЫ ===
+function notifyAdminPaintingSelection(chatId, painting) {
+    const adminToken = process.env.ADMIN_BOT_TOKEN;
+    const adminChatId = process.env.ADMIN_CHAT_ID;
+    
+    if (!adminToken || !adminChatId || adminChatId === 'your_admin_id') {
+        return; // Админ-бот не настроен
+    }
+    
+    // Получаем информацию о пользователе из БД
+    db.get(`SELECT username, first_name FROM users WHERE user_id = ?`, [chatId], (err, user) => {
+        if (err) {
+            console.log('⚠️ Ошибка получения данных пользователя:', err.message);
+            return;
+        }
+        
+        const userName = user ? 
+            (user.first_name || user.username || 'Пользователь') : 
+            `ID: ${chatId}`;
+        
+        const message = 
+            `🎨 <b>Пользователь выбрал картину</b>\n\n` +
+            `👤 Пользователь: ${userName}\n` +
+            `🆔 ID: ${chatId}\n` +
+            `🎨 Картина: ${painting.title}\n` +
+            `💰 Цена: ${painting.price}₽`;
+        
+        // Создаем отдельного бота для админ-чата
+        const adminBot = new TelegramBot(adminToken, { polling: false });
+        
+        adminBot.sendMessage(adminChatId, message, { parse_mode: 'HTML' })
+            .then(() => console.log('✅ Уведомление о выборе картины администратору отправлено'))
+            .catch(err => console.log('⚠️ Ошибка отправки админ-уведомления о выборе картины:', err.message));
     });
 }
 
@@ -527,6 +682,8 @@ bot.on('message', (msg) => {
                     reply_markup: keyboard
                 });
             });
+            
+            // Уведомление администратора о выборе картины (не требуется)
         } else {
             console.log('❌ Картина не найдена в тексте:', text);
         }
@@ -579,8 +736,9 @@ bot.on('message', (msg) => {
             const painting = findPaintingById(paintingId);
             if (painting) {
                 console.log('📦 СОЗДАЕМ ЗАКАЗ:', painting.title);
-                createOrder(chatId, painting);
+                createOrder(chatId, painting, null);
                 clearUserState(chatId);
+                return;
             } else {
                 console.log('❌ Картина не найдена по ID:', paintingId);
                 bot.sendMessage(chatId, '❌ Ошибка: картина не найдена');
@@ -818,168 +976,12 @@ bot.on('callback_query', (callbackQuery) => {
         }
     }
     
-    // Кнопка "✅ Оплатил(а)"
-    if (data.startsWith('paid_')) {
-        const orderId = parseInt(data.replace('paid_', ''));
-        
-        console.log('📞 ОБРАБОТКА ОПЛАТЫ:', { orderId, chatId, data });
-        
-        // Получаем ID пользователя из callback_query
-        const userId = callbackQuery.from.id;
-        
-        db.get(`SELECT * FROM orders WHERE id = ?`, [orderId], (err, order) => {
-            if (err) {
-                console.log('❌ Ошибка запроса заказа:', err.message);
-                bot.sendMessage(chatId, '❌ Произошла ошибка при проверке заказа.');
-                return;
-            }
-            
-            if (!order) {
-                console.log('❌ Заказ не найден:', orderId);
-                bot.sendMessage(chatId, '❌ Заказ не найден.');
-                return;
-            }
-            
-            console.log('✅ Заказ найден:', order);
-            console.log('✅ Проверка пользователя:', { orderUser: order.user_id, userId, chatId });
-            
-            // Проверяем по user_id из callback_query
-            if (order.user_id !== userId) {
-                console.log('❌ Несоответствие пользователя:', { orderUser: order.user_id, userId });
-                bot.sendMessage(chatId, '❌ Заказ не принадлежит вам.');
-                return;
-            }
-            
-            if (order.status === 'paid') {
-                console.log('⚠️ Заказ уже оплачен:', orderId);
-                bot.sendMessage(chatId, `✅ Заказ #${orderId} уже оплачен и в работе!`);
-                return;
-            }
-            
-            // Обновляем статус
-            db.run(`UPDATE orders SET status = 'paid' WHERE id = ?`, [orderId], function(err) {
-                if (err) {
-                    console.log('❌ Ошибка обновления статуса:', err.message);
-                    bot.sendMessage(chatId, '❌ Ошибка при обновлении статуса.');
-                    return;
-                }
-                
-                console.log('✅ Статус обновлен, changes:', this.changes);
-                
-                // Отправляем подтверждение
-                bot.sendMessage(chatId, 
-                    `✅ <b>Заказ #${orderId} оплачен!</b>\n\n` +
-                    `Мы получили подтверждение и начали работу.\n` +
-                    `Срок выполнения: 2-4 дня.\n\n` +
-                    `📞 Следить за статусом можно в разделе "Мои заказы".`,
-                    { parse_mode: 'HTML' }
-                );
-                
-                // Уведомляем администратора
-                notifyAdminPayment(orderId, userId, order);
-            });
-        });
-    }
-    
     // Кнопка "📋 Мои заказы"
-    else if (data === 'my_orders') {
+    if (data === 'my_orders') {
         showMyOrders(chatId);
     }
 });
 
-// === СОЗДАНИЕ ТИКЕТА ПОДДЕРЖКИ ===
-function createSupportTicket(orderId, userId, paintingTitle) {
-    db.run(
-        `INSERT INTO tickets (user_id, order_id, status) VALUES (?, ?, 'open')`,
-        [userId, orderId],
-        function(err) {
-            if (err) {
-                console.error('❌ Ошибка создания тикета:', err);
-                return;
-            }
-            
-            const ticketId = this.lastID;
-            console.log(`✅ Тикет #${ticketId} создан для заказа #${orderId}`);
-            
-            // Отправляем уведомление пользователю
-            bot.sendMessage(userId, 
-                `🎫 <b>Создан тикет поддержки #${ticketId}</b>\n\n` +
-                `💬 Теперь вы можете общаться с нашей командой по поводу заказа #${orderId}\n` +
-                `🎨 ${paintingTitle}\n\n` +
-                `Для общения используйте бота поддержки: @FlexyFrameSupportBot\n` +
-                `Отправьте /start и выберите тикет #${ticketId}`,
-                { parse_mode: 'HTML' }
-            ).catch(() => {});
-
-            // Уведомляем администратора через support_bot (если он запущен)
-            const supportBotToken = process.env.SUPPORT_BOT_TOKEN;
-            if (supportBotToken && ADMIN_CHAT_ID && ADMIN_CHAT_ID !== 'your_admin_id') {
-                const supportBot = new TelegramBot(supportBotToken, { polling: false });
-                
-                // Получаем информацию о пользователе
-                db.get(`SELECT username, first_name FROM users WHERE user_id = ?`, [userId], (err, user) => {
-                    const userName = user ? (user.first_name || user.username || 'Пользователь') : `ID: ${userId}`;
-                    
-                    const adminMessage = 
-                        `🎫 <b>Новый тикет #${ticketId}</b>\n\n` +
-                        `👤 Пользователь: ${userName}\n` +
-                        `🆔 ID: ${userId}\n` +
-                        `🎨 Заказ: #${orderId} - ${paintingTitle}\n\n` +
-                        `💬 Ответьте: #${ticketId} Ваш ответ\n` +
-                        `📋 Просмотр: /tickets`;
-                    
-                    supportBot.sendMessage(ADMIN_CHAT_ID, adminMessage, { parse_mode: 'HTML' })
-                        .then(() => console.log('✅ Уведомление о новом тикете отправлено админу'))
-                        .catch(err => console.log('⚠️ Не удалось отправить уведомление админу:', err.message));
-                });
-            }
-        }
-    );
-}
-
-// === УВЕДОМЛЕНИЕ ОБ ОПЛАТЕ ===
-function notifyAdminPayment(orderId, chatId, order) {
-    const adminToken = process.env.ADMIN_BOT_TOKEN;
-    const adminChatId = process.env.ADMIN_CHAT_ID;
-    
-    if (!adminToken || !adminChatId || adminChatId === 'your_admin_id') {
-        console.log('ℹ️ Админ-бот не настроен, уведомление об оплате не отправлено');
-        return;
-    }
-    
-    // Получаем информацию о пользователе из БД
-    db.get(`SELECT username, first_name FROM users WHERE user_id = ?`, [chatId], (err, user) => {
-        if (err) {
-            console.log('⚠️ Ошибка получения данных пользователя:', err.message);
-            return;
-        }
-        
-        const userName = user ? 
-            (user.first_name || user.username || 'Пользователь') : 
-            `ID: ${chatId}`;
-        
-        const message = 
-            `💰 <b>Оплата подтверждена!</b>\n\n` +
-            `Заказ #${orderId}\n` +
-            `👤 Пользователь: ${userName}\n` +
-            `🆔 ID: ${chatId}\n` +
-            `🎨 ${order.painting_title}\n` +
-            `💰 ${order.price}₽\n` +
-            `📊 Статус: Оплачен\n\n` +
-            `🎫 Тикет поддержки создан автоматически`;
-        
-        // Создаем отдельного бота для админ-чата
-        const adminBot = new TelegramBot(adminToken, { polling: false });
-        
-        adminBot.sendMessage(adminChatId, message, { parse_mode: 'HTML' })
-            .then(() => {
-                console.log('✅ Уведомление об оплате администратору отправлено');
-                // Создаем тикет поддержки
-                createSupportTicket(orderId, chatId, order.painting_title);
-            })
-            .catch(err => console.log('⚠️ Ошибка отправки уведомления об оплате:', err.message));
-    });
-}
 
 // === API ENDPOINTS ===
 
@@ -1103,29 +1105,83 @@ app.post('/webhook/payment', express.json(), (req, res) => {
 });
 
 // === ЗАПУСК СЕРВЕРОВ ===
-app.listen(8080, () => {
-    console.log('🌐 Веб-сервер запущен на порту 8080');
-    console.log('🔗 Доступно: http://127.0.0.1:8080');
+// Для GitHub Pages используем порт из переменной окружения
+const serverPort = process.env.PORT || 8080;
+
+app.listen(serverPort, () => {
+    console.log('🌐 Веб-сервер запущен на порту', serverPort);
+    console.log('🔗 Доступно: http://127.0.0.1:' + serverPort);
+    console.log('✅ Готово для GitHub Pages');
 });
 
-const webhookApp = express();
-webhookApp.use(express.json());
-webhookApp.post('/webhook/payment', (req, res) => {
+// Вебхук для платежей (объединенный)
+app.post('/webhook/payment', express.json(), (req, res) => {
     const { event, object } = req.body;
+    
+    // Валидация подписи YooKassa
+    if (process.env.YOOKASSA_SECRET_KEY && process.env.YOOKASSA_SECRET_KEY !== 'your_secret_key') {
+        const signature = req.headers['x-yookassa-signature'];
+        const crypto = require('crypto');
+        const hash = crypto.createHmac('sha256', process.env.YOOKASSA_SECRET_KEY)
+            .update(JSON.stringify(req.body))
+            .digest('hex');
+        
+        if (signature !== hash) {
+            console.log('❌ Неверная подпись вебхука');
+            return res.status(403).send('Invalid signature');
+        }
+    }
     
     if (event === 'payment.succeeded') {
         const orderId = object.description?.match(/Заказ #(\d+)/)?.[1];
         if (orderId) {
             db.run(`UPDATE orders SET status = 'paid', payment_id = ? WHERE id = ?`, 
-                [object.id, orderId]);
+                [object.id, orderId], (err) => {
+                    if (err) {
+                        console.error('❌ Ошибка обновления статуса:', err);
+                    } else {
+                        console.log('✅ Платеж подтвержден, заказ #' + orderId);
+                        
+                        // Уведомление администратора
+                        db.get('SELECT * FROM orders WHERE id = ?', [orderId], (err, order) => {
+                            if (order) {
+                                notifyAdminPayment(orderId, order.user_id, order);
+                            }
+                        });
+                    }
+                });
         }
     }
     
     res.status(200).send('OK');
 });
 
-webhookApp.listen(3000, () => {
-    console.log('🌐 Вебхук сервер запущен на порту 3000');
+// API endpoint для проверки статуса бота (для GitHub Actions)
+app.get('/api/bot-status', (req, res) => {
+    res.json({ 
+        online: true, 
+        bot_username: '@flexyframe_bot',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0'
+    });
+});
+
+// API endpoint для статистики
+app.get('/api/stats', (req, res) => {
+    db.get('SELECT COUNT(*) as total_orders FROM orders', (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        db.get('SELECT COUNT(*) as total_users FROM users', (err2, row2) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            
+            res.json({
+                total_orders: row.total_orders,
+                total_users: row2.total_users,
+                uptime: process.uptime(),
+                timestamp: new Date().toISOString()
+            });
+        });
+    });
 });
 
 // === ОБРАБОТКА ОШИБОК ===
