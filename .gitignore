@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables (NEVER commit secrets!)
+.env
+.env.local
+.env.production
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+bot.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# GitHub Actions artifacts
+.github/workflows/*.log
+
+# Custom scripts (keep in repo but ignore if needed)
+kill_all_terminals.bat
+kill_all_terminals_silent.bat
+fix_database.js
+optimize-images.js
+test_site.html
+payment.html
+temp_for_stofor4ik/
+
+# Build artifacts (if any)
+dist/
+build/
+coverage/
+
+# Environment-specific files
+.env.development
+.env.test
+.env.staging

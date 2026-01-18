@@ -1,0 +1,30 @@
+{
+  "name": "flexyframe",
+  "version": "1.0.0",
+  "description": "Уникальные граффити-арты на заказ с Telegram ботом",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node bot.js",
+    "test": "node test_bot.js && node test_web.js",
+    "test:bot": "node test_bot.js",
+    "test:web": "node test_web.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-telegram-bot-api": "^0.64.0",
+    "sqlite3": "^5.1.6",
+    "yookassa": "^0.1.1"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "art",
+    "grafitti",
+    "shop"
+  ],
+  "author": "FlexyFrame",
+  "license": "MIT"
+}
