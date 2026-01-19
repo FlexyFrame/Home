@@ -12,6 +12,9 @@ package-lock.json
 *.sqlite
 *.sqlite3
 
+# Bot files (keep locally, don't push to GitHub)
+bot.js
+
 # Logs
 *.log
 bot.log
