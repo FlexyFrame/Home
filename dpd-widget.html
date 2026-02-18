@@ -98,21 +98,90 @@
     </div>
     
     <div class="container">
-        <iframe 
-            id="widget-container"
-            allow="geolocation"
-        ></iframe>
+        <div class="map-container">
+            <div id="map" style="width: 100%; height: 100%;"></div>
+        </div>
     </div>
 
+    <!-- Leaflet (OpenStreetMap) - бесплатные карты -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <script>
         // Получаем город из URL параметра
         const urlParams = new URLSearchParams(window.location.search);
         const city = urlParams.get('city') || 'Москва';
-        const encodedCity = encodeURIComponent(city);
         
-        // Устанавливаем src после загрузки страницы
-        document.getElementById('widget-container').src = 
-            `https://widget.dpd.ru/widget/latest/index.html?lang=ru&pickupType=PVZ&hideTerminals=false&country=RU&city=${encodedCity}`;
+        // Координаты по умолчанию для разных городов
+        const cityCoords = {
+            'Москва': [55.7558, 37.6173],
+            'Санкт-Петербург': [59.9343, 30.3351],
+            'Новосибирск': [55.0084, 82.9357],
+            'Екатеринбург': [56.8389, 60.6057],
+            'Казань': [55.8304, 49.0661],
+            'Нижний Новгород': [56.2965, 43.9361],
+            'Челябинск': [55.1644, 61.4368],
+            'Самара': [53.1959, 50.1008],
+            'Омск': [54.9915, 73.4713],
+            'Ростов-на-Дону': [47.2278, 39.7128],
+            'Уфа': [54.7431, 55.9678],
+            'Томск': [56.4977, 84.9824],
+            'Красноярск': [56.0153, 92.8938],
+            'Воронеж': [51.6608, 39.2003],
+            'Пермь': [58.0105, 56.2294],
+            'Волгоград': [48.7194, 44.5018],
+            'Краснодар': [45.0355, 38.9753],
+            'Саратов': [51.5331, 45.9988],
+            'Тюмень': [57.1530, 65.5343],
+            'Ижевск': [56.8527, 53.2060]
+        };
+        
+        const defaultCenter = cityCoords[city] || [55.7558, 37.6173];
+        
+        // Инициализация карты
+        const map = L.map('map').setView(defaultCenter, 12);
+        
+        // Добавляем слой карты OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Пример ПВЗ с координатами (в реальном приложении - с DPD API)
+        const pickupPoints = [
+            { name: 'ПВЗ Центр', address: 'ул. Ленина, 1', lat: defaultCenter[0] + 0.01, lon: defaultCenter[1] + 0.01 },
+            { name: 'ПВЗ Север', address: 'ул. Пушкина, 5', lat: defaultCenter[0] + 0.02, lon: defaultCenter[1] - 0.01 },
+            { name: 'ПВЗ Юг', address: 'ул. Гагарина, 10', lat: defaultCenter[0] - 0.01, lon: defaultCenter[1] + 0.02 }
+        ];
+        
+        // Добавляем маркеры
+        pickupPoints.forEach(point => {
+            const marker = L.marker([point.lat, point.lon]).addTo(map);
+            marker.bindPopup(`
+                <b>${point.name}</b><br>
+                ${point.address}<br>
+                <button onclick="selectPickupPoint('${point.name}', '${point.address}', ${point.lat}, ${point.lon})">Выбрать</button>
+            `);
+        });
+        
+        // Функция выбора ПВЗ
+        function selectPickupPoint(name, address, lat, lon) {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.sendData(JSON.stringify({
+                    type: 'pickup_point',
+                    pickupPointId: name,
+                    address: address,
+                    name: name,
+                    latitude: lat,
+                    longitude: lon
+                }));
+                window.Telegram.WebApp.close();
+            } else {
+                alert('Выбран: ' + name + ', ' + address);
+            }
+        }
+        
+        // Скрываем загрузку
+        document.getElementById('loading').classList.add('hidden');
     </script>
 
     <div class="loading" id="loading">
