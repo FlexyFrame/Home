@@ -1594,6 +1594,46 @@ app.get('/api/bot-status', (req, res) => {
     });
 });
 
+// === DPD API ENDPOINTS ===
+
+// Получить список ПВЗ для карты
+app.get('/api/dpd/pickup-points', async (req, res) => {
+    const { city } = req.query;
+    
+    if (!city) {
+        return res.json({ error: true, message: 'Укажите город' });
+    }
+    
+    try {
+        // Используем DPD интеграцию
+        const pickupPointsResult = await dpd.getPickupPoints(city);
+        
+        // Проверяем на ошибку
+        if (pickupPointsResult && pickupPointsResult.error) {
+            return res.json({ error: true, message: pickupPointsResult.message });
+        }
+        
+        // Проверяем, что получили массив
+        const pickupPoints = Array.isArray(pickupPointsResult) ? pickupPointsResult : [];
+        
+        // Форматируем для карты
+        const formattedPoints = pickupPoints.map(point => ({
+            id: point.id,
+            name: point.name,
+            address: point.address,
+            schedule: point.schedule,
+            lat: point.coordinates?.latitude,
+            lon: point.coordinates?.longitude,
+            type: point.type
+        })).filter(p => p.lat && p.lon); // Только с координатами
+        
+        res.json({ points: formattedPoints });
+    } catch (error) {
+        console.error('Ошибка получения ПВЗ:', error);
+        res.json({ error: true, message: 'Ошибка получения данных' });
+    }
+});
+
 // Вебхук для получения уведомлений от Юкассы
 app.post('/api/webhook/yookassa', express.json(), (req, res) => {
     const event = req.body;

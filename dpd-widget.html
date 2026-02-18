@@ -108,60 +108,108 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script>
+        // Конфигурация
+        const API_BASE = window.location.origin;
+        
         // Получаем город из URL параметра
         const urlParams = new URLSearchParams(window.location.search);
-        const city = urlParams.get('city') || 'Москва';
+        let cityName = urlParams.get('city') || 'Москва';
         
-        // Координаты по умолчанию для разных городов
-        const cityCoords = {
-            'Москва': [55.7558, 37.6173],
-            'Санкт-Петербург': [59.9343, 30.3351],
-            'Новосибирск': [55.0084, 82.9357],
-            'Екатеринбург': [56.8389, 60.6057],
-            'Казань': [55.8304, 49.0661],
-            'Нижний Новгород': [56.2965, 43.9361],
-            'Челябинск': [55.1644, 61.4368],
-            'Самара': [53.1959, 50.1008],
-            'Омск': [54.9915, 73.4713],
-            'Ростов-на-Дону': [47.2278, 39.7128],
-            'Уфа': [54.7431, 55.9678],
-            'Томск': [56.4977, 84.9824],
-            'Красноярск': [56.0153, 92.8938],
-            'Воронеж': [51.6608, 39.2003],
-            'Пермь': [58.0105, 56.2294],
-            'Волгоград': [48.7194, 44.5018],
-            'Краснодар': [45.0355, 38.9753],
-            'Саратов': [51.5331, 45.9988],
-            'Тюмень': [57.1530, 65.5343],
-            'Ижевск': [56.8527, 53.2060]
-        };
+        // Карта и маркеры
+        let map = null;
+        let markers = [];
         
-        const defaultCenter = cityCoords[city] || [55.7558, 37.6173];
-        
-        // Инициализация карты
-        const map = L.map('map').setView(defaultCenter, 12);
-        
-        // Добавляем слой карты OpenStreetMap
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-        
-        // Пример ПВЗ с координатами (в реальном приложении - с DPD API)
-        const pickupPoints = [
-            { name: 'ПВЗ Центр', address: 'ул. Ленина, 1', lat: defaultCenter[0] + 0.01, lon: defaultCenter[1] + 0.01 },
-            { name: 'ПВЗ Север', address: 'ул. Пушкина, 5', lat: defaultCenter[0] + 0.02, lon: defaultCenter[1] - 0.01 },
-            { name: 'ПВЗ Юг', address: 'ул. Гагарина, 10', lat: defaultCenter[0] - 0.01, lon: defaultCenter[1] + 0.02 }
-        ];
-        
-        // Добавляем маркеры
-        pickupPoints.forEach(point => {
-            const marker = L.marker([point.lat, point.lon]).addTo(map);
-            marker.bindPopup(`
-                <b>${point.name}</b><br>
-                ${point.address}<br>
-                <button onclick="selectPickupPoint('${point.name}', '${point.address}', ${point.lat}, ${point.lon})">Выбрать</button>
-            `);
-        });
+        // Инициализация
+        async function init() {
+            try {
+                // Загружаем ПВЗ с сервера
+                const response = await fetch(`${API_BASE}/api/dpd/pickup-points?city=${encodeURIComponent(cityName)}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.message || 'Ошибка загрузки ПВЗ');
+                    document.getElementById('loading').classList.add('hidden');
+                    return;
+                }
+                
+                const pickupPoints = data.points || [];
+                
+                if (pickupPoints.length === 0) {
+                    showError('Пункты выдачи не найдены для этого города');
+                    document.getElementById('loading').classList.add('hidden');
+                    return;
+                }
+                
+                // Центр карты - по первому ПВЗ или координатам
+                let center = [55.7558, 37.6173]; // Москва по умолчанию
+                
+                // Ищем ПВЗ с координатами
+                const pointWithCoords = pickupPoints.find(p => p.lat && p.lon);
+                if (pointWithCoords && pointWithCoords.lat && pointWithCoords.lon) {
+                    center = [parseFloat(pointWithCoords.lat), parseFloat(pointWithCoords.lon)];
+                } else if (pickupPoints[0] && pickupPoints[0].coordinates) {
+                    center = [
+                        parseFloat(pickupPoints[0].coordinates.latitude), 
+                        parseFloat(pickupPoints[0].coordinates.longitude)
+                    ];
+                }
+                
+                // Инициализация карты
+                map = L.map('map').setView(center, 12);
+                
+                // Слой карты
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap'
+                }).addTo(map);
+                
+                // Добавляем маркеры
+                pickupPoints.forEach((point, index) => {
+                    let lat, lon;
+                    
+                    if (point.lat && point.lon) {
+                        lat = parseFloat(point.lat);
+                        lon = parseFloat(point.lon);
+                    } else if (point.coordinates) {
+                        lat = parseFloat(point.coordinates.latitude);
+                        lon = parseFloat(point.coordinates.longitude);
+                    } else {
+                        return; // Пропускаем без координат
+                    }
+                    
+                    const marker = L.marker([lat, lon]).addTo(map);
+                    const address = point.address || point.name;
+                    const name = point.name || 'ПВЗ';
+                    const schedule = point.schedule || '';
+                    
+                    marker.bindPopup(`
+                        <div style="min-width: 150px;">
+                            <b>${name}</b><br>
+                            <span style="font-size: 12px;">${address}</span><br>
+                            <span style="font-size: 11px; color: #666;">${schedule}</span><br>
+                            <button onclick="selectPickupPoint('${name}', '${address.replace(/'/g, "\\'")}', ${lat}, ${lon})" 
+                                style="margin-top: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                Выбрать
+                            </button>
+                        </div>
+                    `);
+                    
+                    markers.push(marker);
+                });
+                
+                // Автоподбор центра
+                if (markers.length > 0) {
+                    const group = L.featureGroup(markers);
+                    map.fitBounds(group.getBounds().pad(0.1));
+                }
+                
+                document.getElementById('loading').classList.add('hidden');
+                
+            } catch (error) {
+                console.error('Ошибка загрузки:', error);
+                showError('Не удалось загрузить карту. Попробуйте позже.');
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
         
         // Функция выбора ПВЗ
         function selectPickupPoint(name, address, lat, lon) {
@@ -176,12 +224,13 @@
                 }));
                 window.Telegram.WebApp.close();
             } else {
-                alert('Выбран: ' + name + ', ' + address);
+                // Для отладки
+                alert('Выбран: ' + name + '\n' + address);
             }
         }
         
-        // Скрываем загрузку
-        document.getElementById('loading').classList.add('hidden');
+        // Запуск
+        init();
     </script>
 
     <div class="loading" id="loading">
