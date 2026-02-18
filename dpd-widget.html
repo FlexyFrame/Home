@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор пункта выдачи DPD</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+        }
+        #widget-container {
+            flex: 1;
+            min-height: 500px;
+            border: none;
+            border-radius: 12px;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255,255,255,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .loading.hidden {
+            display: none;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff4757;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            display: none;
+            z-index: 1001;
+        }
+        .error-message.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📦 Выберите пункт выдачи</h1>
+        <p>Нажмите на карту или список для выбора ПВЗ</p>
+    </div>
+    
+    <div class="container">
+        <iframe 
+            id="widget-container"
+            allow="geolocation"
+        ></iframe>
+    </div>
+
+    <script>
+        // Получаем город из URL параметра
+        const urlParams = new URLSearchParams(window.location.search);
+        const city = urlParams.get('city') || 'Москва';
+        const encodedCity = encodeURIComponent(city);
+        
+        // Устанавливаем src после загрузки страницы
+        document.getElementById('widget-container').src = 
+            `https://widget.dpd.ru/widget/latest/index.html?lang=ru&pickupType=PVZ&hideTerminals=false&country=RU&city=${encodedCity}`;
+    </script>
+
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="error-message" id="error"></div>
+
+    <script>
+        // Скрываем загрузку когда виджет готов
+        const iframe = document.getElementById('widget-container');
+        const loading = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        
+        // Показываем/скрываем загрузку
+        iframe.addEventListener('load', () => {
+            setTimeout(() => {
+                loading.classList.add('hidden');
+            }, 1000);
+        });
+
+        // Обработка сообщений от виджета DPD
+        window.addEventListener('message', (event) => {
+            console.log('📦 Получено сообщение от DPD Widget:', event.data);
+            
+            // Проверяем, что это сообщение от DPD виджета
+            if (event.data && event.data.dpdWidget) {
+                const widgetData = event.data.dpdWidget;
+                
+                if (widgetData.pickupPointResult) {
+                    // Пользователь выбрал пункт выдачи
+                    const pickupPoint = widgetData.pickupPointResult;
+                    
+                    console.log('✅ Выбран ПВЗ:', pickupPoint);
+                    
+                    // Отправляем данные в бота через Telegram Web App API
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.sendData(JSON.stringify({
+                            type: 'pickup_point',
+                            pickupPointId: pickupPoint.id || pickupPoint.pickupPointId,
+                            address: pickupPoint.address || pickupPoint.name,
+                            name: pickupPoint.name || pickupPoint.pickupPointName,
+                            description: pickupPoint.description,
+                            latitude: pickupPoint.latitude,
+                            longitude: pickupPoint.longitude
+                        }));
+                        
+                        // Закрываем Web App
+                        setTimeout(() => {
+                            window.Telegram.WebApp.close();
+                        }, 500);
+                    } else {
+                        // Для отладки - показываем данные
+                        alert('Выбран пункт: ' + (pickupPoint.address || pickupPoint.name));
+                    }
+                }
+            }
+        });
+
+        // Обработка ошибок
+        window.addEventListener('error', (event) => {
+            console.error('Ошибка:', event.error);
+            showError('Произошла ошибка при загрузке виджета');
+        });
+
+        function showError(message) {
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+            setTimeout(() => {
+                errorEl.classList.remove('show');
+            }, 3000);
+        }
+
+        // Инициализация Telegram Web App
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+    </script>
+</body>
+</html>
