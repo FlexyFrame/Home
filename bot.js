@@ -710,6 +710,12 @@ bot.on('message', (msg) => {
         return;
     }
     
+    // DPD: Ввод города (пользователь вводит название города)
+    if (session && session.state === 'dpd_entering_city') {
+        handleDPDCityInput(chatId, text, session);
+        return;
+    }
+    
     // DPD: Выбор города
     if (session && session.state === 'dpd_selecting_city') {
         handleDPDCitySelection(chatId, text, session);
@@ -1930,61 +1936,27 @@ async function startDPDAddressSelection(chatId) {
         return;
     }
     
-    setUserState(chatId, 'dpd_selecting_city');
-    
-    // Пытаемся получить список городов
-    const citiesResult = await dpd.searchCities('');
-    
-    // Проверяем на ошибку
-    if (isDPDUnavailable(citiesResult)) {
-        bot.sendMessage(chatId, 
-            `⚠️ <b>Технические неполадки</b>\n\n` +
-            `Не удалось загрузить список городов.\n` +
-            `Попробуйте позже или свяжитесь с поддержкой @FlexyFrameSupport`,
-            { parse_mode: 'HTML' }
-        );
-        clearUserState(chatId);
-        return;
-    }
-    
-    // Проверяем, что получили массив
-    const cities = Array.isArray(citiesResult) ? citiesResult : [];
-    
-    if (cities.length === 0) {
-        bot.sendMessage(chatId, 
-            `⚠️ <b>Технические неполадки</b>\n\n` +
-            `Список городов недоступен.\n` +
-            `Свяжитесь с поддержкой: @FlexyFrameSupport`,
-            { parse_mode: 'HTML' }
-        );
-        return;
-    }
-    
-    const popularCities = cities.slice(0, 10);
-    
     const message = 
         `📍 <b>Выбор адреса доставки DPD</b>\n\n` +
         `🚚 <b>Доставка по всей России</b>\n\n` +
-        `Выберите город из списка:\n`;
+        `Выберите удобный способ:\n\n` +
+        `1️⃣ <b>Ввести название города</b>\n` +
+        `   Напишите название города в чат\n\n` +
+        `2️⃣ <b>Отправить геолокацию</b>\n` +
+        `   Мы найдём ближайшие ПВЗ\n\n` +
+        `💡 <i>Если вашего города нет в списке — просто напишите его название</i>`;
     
-    // Создаём inline клавиатуру с городами
+    // Клавиатура с кнопкой геолокации
     const keyboard = {
-        inline_keyboard: []
+        keyboard: [
+            [{ text: '📍 Отправить геолокацию', request_location: true }],
+            [{ text: '🔙 Назад в меню' }]
+        ],
+        resize_keyboard: true
     };
     
-    // Добавляем города по 2 в ряд
-    for (let i = 0; i < popularCities.length; i += 2) {
-        const row = [];
-        row.push({ text: popularCities[i].name, callback_data: `dpd_city_${popularCities[i].name}_${popularCities[i].code || ''}` });
-        
-        if (i + 1 < popularCities.length) {
-            row.push({ text: popularCities[i + 1].name, callback_data: `dpd_city_${popularCities[i + 1].name}_${popularCities[i + 1].code || ''}` });
-        }
-        
-        keyboard.inline_keyboard.push(row);
-    }
-    
-    keyboard.inline_keyboard.push([{ text: '🔙 Назад в меню', callback_data: 'back_to_main' }]);
+    // Устанавливаем состояние - ожидаем город от пользователя
+    setUserState(chatId, 'dpd_entering_city');
     
     bot.sendMessage(chatId, message, {
         parse_mode: 'HTML',
@@ -2199,6 +2171,175 @@ function handleDPDAddressInput(chatId, text, session) {
         reply_markup: keyboard
     });
 }
+
+// === ОБРАБОТКА ВВОДА ГОРОДА ПОЛЬЗОВАТЕЛЕМ ===
+async function handleDPDCityInput(chatId, text, session) {
+    // Проверяем, что пользователь не нажал кнопку
+    if (text === '🔙 Назад в меню') {
+        clearUserState(chatId);
+        showMainMenu(chatId);
+        return;
+    }
+    
+    const cityName = text.trim();
+    
+    if (cityName.length < 2) {
+        bot.sendMessage(chatId, '⚠️ Название города слишком короткое. Попробуйте ещё раз.');
+        return;
+    }
+    
+    bot.sendChatAction(chatId, 'typing');
+    
+    // Ищем город в DPD
+    const citiesResult = await dpd.searchCities(cityName);
+    
+    // Проверяем на ошибку
+    if (isDPDUnavailable(citiesResult)) {
+        // Даже если поиск не работает - пробуем использовать введённый город
+        console.log('⚠️ Поиск городов недоступен, используем введённый город:', cityName);
+        
+        // Показываем выбор типа доставки с введённым городом
+        setUserState(chatId, 'dpd_selecting_delivery_type', {
+            city: cityName,
+            cityCode: '',
+            region: ''
+        });
+        
+        showDeliveryTypeOptions(chatId, cityName, '');
+        return;
+    }
+    
+    const cities = Array.isArray(citiesResult) ? citiesResult : [];
+    
+    if (cities.length === 0) {
+        // Город не найден - пробуем использовать как есть
+        console.log('⚠️ Город не найден в DPD, используем как есть:', cityName);
+        
+        setUserState(chatId, 'dpd_selecting_delivery_type', {
+            city: cityName,
+            cityCode: '',
+            region: ''
+        });
+        
+        showDeliveryTypeOptions(chatId, cityName, '');
+        return;
+    }
+    
+    // Если нашли один город - сразу показываем варианты доставки
+    if (cities.length === 1) {
+        const city = cities[0];
+        setUserState(chatId, 'dpd_selecting_delivery_type', {
+            city: city.name,
+            cityCode: city.code || city.id,
+            region: city.region
+        });
+        
+        showDeliveryTypeOptions(chatId, city.name, city.code || city.id);
+        return;
+    }
+    
+    // Нашли несколько городов - показываем выбор
+    const message = `🏙️ Найдено несколько городов. Выберите ваш:\n\n`;
+    
+    const keyboard = {
+        inline_keyboard: []
+    };
+    
+    // Показываем до 10 городов
+    cities.slice(0, 10).forEach(city => {
+        const regionInfo = city.region ? ` (${city.region})` : '';
+        keyboard.inline_keyboard.push([{
+            text: `${city.name}${regionInfo}`,
+            callback_data: `dpd_city_${city.name}_${city.code || city.id || ''}`
+        }]);
+    });
+    
+    keyboard.inline_keyboard.push([{ text: '🔙 Назад', callback_data: 'dpd_back_to_cities' }]);
+    
+    bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard
+    });
+}
+
+// === ПОКАЗАТЬ ВАРИАНТЫ ДОСТАВКИ ===
+function showDeliveryTypeOptions(chatId, cityName, cityCode) {
+    const message = 
+        `🏙️ <b>${cityName}</b>\n\n` +
+        `📦 <b>Выберите способ доставки:</b>\n\n` +
+        `1️⃣ <b>Самовывоз из ПВЗ</b>\n` +
+        `   📍 Пункт выдачи в вашем городе\n\n` +
+        `2️⃣ <b>Курьерская доставка</b>\n` +
+        `   🚚 Доставка до двери\n\n` +
+        `💡 <i>Стоимость будет рассчитана при оформлении заказа</i>`;
+    
+    const keyboard = {
+        inline_keyboard: [
+            [{ text: '📍 Выбрать ПВЗ на карте', web_app: { url: `${SITE_URL}/dpd-widget.html?city=${encodeURIComponent(cityName)}` } }],
+            [{ text: '📦 Список ПВЗ', callback_data: `dpd_delivery_pvz_${cityName}_${cityCode}` }],
+            [{ text: '🚚 Курьерская доставка', callback_data: `dpd_delivery_courier_${cityName}_${cityCode}` }],
+            [{ text: '🔙 Назад к выбору города', callback_data: 'dpd_back_to_cities' }]
+        ]
+    };
+    
+    bot.sendMessage(chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: keyboard
+    }).catch(() => {
+        // Если не удалось отправить - пробуем показать просто кнопками
+        const simpleKeyboard = {
+            keyboard: [
+                [{ text: '📦 Самовывоз из ПВЗ' }],
+                [{ text: '🚚 Курьерская доставка' }],
+                [{ text: '🔙 Назад' }]
+            ],
+            resize_keyboard: true
+        };
+        
+        bot.sendMessage(chatId, message, {
+            parse_mode: 'HTML',
+            reply_markup: simpleKeyboard
+        });
+        
+        // Устанавливаем состояние для старого обработчика
+        setUserState(chatId, 'dpd_selecting_delivery_type', {
+            city: cityName,
+            cityCode: cityCode,
+            region: ''
+        });
+    });
+}
+
+// === ОБРАБОТКА ГЕОЛОКАЦИИ ПОЛЬЗОВАТЕЛЯ ===
+bot.on('location', (msg) => {
+    const chatId = msg.chat.id;
+    const location = msg.location;
+    
+    console.log('📍 Получена геолокация:', location);
+    
+    // Проверяем состояние
+    const session = getUserState(chatId);
+    
+    if (!session || session.state !== 'dpd_entering_city') {
+        // Игнорируем геолокацию если не в нужном состоянии
+        console.log('⚠️ Геолокация получена вне контекста DPD');
+        return;
+    }
+    
+    const lat = location.latitude;
+    const lon = location.longitude;
+    
+    // TODO: Можно использовать геокодер для определения города по координатам
+    // Показываем сообщение что геолокация получена
+    bot.sendMessage(chatId, 
+        `📍 Геолокация получена!\n\n` +
+        `Широта: ${lat}\n` +
+        `Долгота: ${lon}\n\n` +
+        `К сожалению, автоматическое определение города по координатам временно недоступно.\n` +
+        `📝 Пожалуйста, напишите название вашего города в чат.`,
+        { parse_mode: 'HTML' }
+    );
+});
 
 // === ЛЕГАСИ ФУНКЦИИ (для совместимости) ===
 
