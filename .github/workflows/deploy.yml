@@ -1,0 +1,94 @@
+name: Deploy FlexyFrame Bot
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '*/5 * * * *'  # Каждые 5 минут для поддержания активности
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./
+        keep_files: false
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
+
+    - name: Keep bot alive
+      run: |
+        # Установка зависимостей для бота
+        npm install node-telegram-bot-api express sqlite3 yookassa dotenv axios
+
+        # Создание .env файла из секретов
+        cat > .env << EOF
+        TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
+        ADMIN_CHAT_ID=${{ secrets.ADMIN_CHAT_ID }}
+        YOOKASSA_SHOP_ID=${{ secrets.YOOKASSA_SHOP_ID }}
+        YOOKASSA_SECRET_KEY=${{ secrets.YOOKASSA_SECRET_KEY }}
+        SITE_URL=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+        PORT=3000
+        EOF
+
+        # Запуск бота в фоне
+        export NODE_ENV=production
+        nohup node bot.js > bot.log 2>&1 &
+
+        # Ожидание запуска
+        sleep 5
+
+        # Проверка статуса
+        if pgrep -f "node.*bot" > /dev/null; then
+          echo "✅ Bot started successfully"
+          echo "PID: $(pgrep -f 'node.*bot')"
+        else
+          echo "❌ Bot failed to start"
+          cat bot.log
+          exit 1
+        fi
+
+        # Проверка каждые 5 минут
+        echo "Starting keep-alive loop..."
+        while true; do
+          sleep 300
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/api/bot-status || echo "000")
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Bot is alive at $(date)"
+          else
+            echo "❌ Bot check failed at $(date) - HTTP $RESPONSE"
+            # Попытка перезапуска
+            if ! pgrep -f "node.*bot" > /dev/null; then
+              echo "Restarting bot..."
+              nohup node bot.js > bot.log 2>&1 &
+            fi
+          fi
+        done
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+        YOOKASSA_SHOP_ID: ${{ secrets.YOOKASSA_SHOP_ID }}
+        YOOKASSA_SECRET_KEY: ${{ secrets.YOOKASSA_SECRET_KEY }}
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: bot-logs
+        path: bot.log
+        retention-days: 7

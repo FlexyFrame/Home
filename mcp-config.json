@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "dpd": {
+      "command": "node",
+      "args": ["mcp-dpd-server.js"],
+      "env": {
+        "DPD_CLIENT_NUMBER": "${env:DPD_CLIENT_NUMBER}",
+        "DPD_CLIENT_KEY": "${env:DPD_CLIENT_KEY}",
+        "DPD_CLIENT_NAME": "${env:DPD_CLIENT_NAME}",
+        "DPD_TEST_MODE": "${env:DPD_TEST_MODE}"
+      }
+    }
+  }
+}

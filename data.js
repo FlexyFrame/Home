@@ -116,7 +116,7 @@ const imagePathsCache = new Map();
 // === ВАЛИДАЦИЯ И УТИЛИТЫ ===
 const validators = {
     painting: (painting) => {
-        return painting && 
+        return painting &&
                typeof painting === 'object' &&
                typeof painting.id === 'number' &&
                typeof painting.title === 'string' &&
@@ -124,11 +124,11 @@ const validators = {
                painting.id > 0 &&
                painting.price > 0;
     },
-    
+
     paintingId: (id) => {
         return typeof id === 'number' && id > 0 && id <= PAINTINGS_DATA.length;
     },
-    
+
     category: (category) => {
         return typeof category === 'string' && category.length > 0;
     }
@@ -151,19 +151,19 @@ function findPaintingById(id) {
         console.warn(`Невалидный ID картины: ${id}`);
         return null;
     }
-    
+
     const painting = PAINTINGS_DATA.find(p => p.id === id);
-    
+
     if (!painting) {
         console.warn(`Картина с ID ${id} не найдена`);
         return null;
     }
-    
+
     if (!validators.painting(painting)) {
         console.error(`Картина с ID ${id} не прошла валидацию`);
         return null;
     }
-    
+
     return painting;
 }
 
@@ -174,10 +174,10 @@ function findPaintingByTitle(title) {
     if (typeof title !== 'string' || title.length < 2) {
         return null;
     }
-    
+
     const lowerTitle = title.toLowerCase();
-    return PAINTINGS_DATA.find(p => 
-        p.title.toLowerCase().includes(lowerTitle) || 
+    return PAINTINGS_DATA.find(p =>
+        p.title.toLowerCase().includes(lowerTitle) ||
         p.fullTitle.toLowerCase().includes(lowerTitle)
     );
 }
@@ -189,36 +189,36 @@ function getPaintingImagePath(painting) {
     if (!validators.painting(painting)) {
         return getLogoPath(); // Fallback на логотип
     }
-    
+
     // Проверяем кэш
     const cacheKey = `${painting.category}_${painting.file}`;
     if (imagePathsCache.has(cacheKey)) {
         return imagePathsCache.get(cacheKey);
     }
-    
+
     const path = require('path');
     const fs = require('fs');
-    
+
     // Попытка найти файл в указанной категории
     const fullPath = path.join(__dirname, painting.category, painting.file);
-    
+
     if (fs.existsSync(fullPath)) {
         imagePathsCache.set(cacheKey, fullPath);
         return fullPath;
     }
-    
+
     // Fallback: попробовать другие расширения
     const extensions = ['.jpg', '.png', '.jpeg', '.webp'];
     for (const ext of extensions) {
-        const altPath = path.join(__dirname, painting.category, 
+        const altPath = path.join(__dirname, painting.category,
             painting.file.replace(/\.(jpg|png|jpeg|webp)$/i, ext));
-        
+
         if (fs.existsSync(altPath)) {
             imagePathsCache.set(cacheKey, altPath);
             return altPath;
         }
     }
-    
+
     // Если ничего не найдено - возвращаем логотип
     console.warn(`Изображение не найдено: ${painting.title}, используется логотип`);
     return getLogoPath();
@@ -230,13 +230,13 @@ function getPaintingImagePath(painting) {
 function getLogoPath() {
     const path = require('path');
     const fs = require('fs');
-    
+
     const logoPath = path.join(__dirname, 'ЛОГОТИП', 'Logo.png');
     const fallbackPath = path.join(__dirname, 'ЛОГОТИП', 'Logo.jpg');
-    
+
     if (fs.existsSync(logoPath)) return logoPath;
     if (fs.existsSync(fallbackPath)) return fallbackPath;
-    
+
     // Последний fallback
     return path.join(__dirname, 'ЛОГОТИП', 'Logo.png');
 }
@@ -256,8 +256,8 @@ function getPaintingsByCategory(category) {
     if (!validators.category(category)) {
         return [];
     }
-    
-    return PAINTINGS_DATA.filter(p => 
+
+    return PAINTINGS_DATA.filter(p =>
         p.category.toLowerCase() === category.toLowerCase()
     );
 }
@@ -279,9 +279,9 @@ function searchPaintings(query) {
     if (typeof query !== 'string' || query.length < 2) {
         return [];
     }
-    
+
     const lowerQuery = query.toLowerCase();
-    return PAINTINGS_DATA.filter(p => 
+    return PAINTINGS_DATA.filter(p =>
         p.title.toLowerCase().includes(lowerQuery) ||
         p.fullTitle.toLowerCase().includes(lowerQuery) ||
         p.category.toLowerCase().includes(lowerQuery) ||
@@ -308,7 +308,7 @@ function getStats() {
 module.exports = {
     // Данные
     paintings: getAllPaintings(),
-    
+
     // Функции
     getAllPaintings,
     findPaintingById,
@@ -320,7 +320,7 @@ module.exports = {
     getPaintingsWithBadge,
     searchPaintings,
     getStats,
-    
+
     // Валидаторы
     validators
 };

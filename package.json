@@ -1,21 +1,27 @@
 {
   "name": "flexyframe",
-  "version": "1.0.0",
-  "description": "Уникальные граффити-арты на заказ с Telegram ботом",
+  "version": "2.0.0",
+  "description": "Уникальные граффити-арты на заказ с Telegram ботом и YooKassa",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
     "dev": "node bot.js",
-    "test": "node test_bot.js && node test_web.js",
-    "test:bot": "node test_bot.js",
-    "test:web": "node test_web.js"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "axios": "^1.6.0",
+    "@appigram/yookassa-node": "^1.1.12",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@pipedream/dpd2": "^0.1.0",
+    "axios": "^1.13.5",
     "dotenv": "^16.3.1",
+    "dpd": "^0.3.1-beta",
     "express": "^4.18.2",
+    "ip-cidr": "^4.0.2",
+    "moment": "^2.30.1",
+    "node-cron": "^4.2.1",
     "node-telegram-bot-api": "^0.64.0",
     "sqlite3": "^5.1.6",
+    "uuid": "^13.0.0",
     "yookassa": "^0.1.1"
   },
   "keywords": [
@@ -23,8 +29,14 @@
     "bot",
     "art",
     "grafitti",
-    "shop"
+    "shop",
+    "yookassa",
+    "payment"
   ],
   "author": "FlexyFrame",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.0.9",
+    "typescript": "^5.9.3"
+  }
 }

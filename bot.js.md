@@ -108,33 +108,8 @@ async function checkPaymentStatus(paymentId) {
 const { paintings, getPaintingImagePath, findPaintingById, findPaintingByTitle } = require('./data.js');
 
 // === ИМПОРТ DPD ===
-const { FlexyFrameDPDIntegration } = require('./dpd-integration');
-const logger = require('./logger');
-
-// Инициализация DPD интеграции
-let dpdIntegration = null;
-
-async function initializeDPD() {
-    try {
-        dpdIntegration = new FlexyFrameDPDIntegration({
-            clientNumber: process.env.DPD_CLIENT_NUMBER,
-            clientKey: process.env.DPD_CLIENT_KEY,
-            testMode: process.env.DPD_TEST_MODE === 'true'
-        });
-        
-        await dpdIntegration.initialize();
-        await dpdIntegration.start();
-        
-        console.log('✅ DPD интеграция инициализирована');
-        logger.info('DPD интеграция инициализирована');
-    } catch (error) {
-        console.error('❌ Ошибка инициализации DPD:', error.message);
-        logger.error('Ошибка инициализации DPD', error);
-    }
-}
-
-// Запускаем инициализацию DPD
-initializeDPD();
+const dpd = require('./dpd-integration');
+console.log('📦 DPD модуль загружен');
 
 // === ИНИЦИАЛИЗАЦИЯ БОТА ===
 const bot = new TelegramBot(TOKEN, { polling: true });
