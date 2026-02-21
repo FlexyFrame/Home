@@ -3,311 +3,1695 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Выбор пункта выдачи DPD</title>
+    <title>FlexyFrame DPD Widget</title>
     <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --bg-color: #f8f9fa;
+            --text-color: #333;
+            --border-radius: 8px;
+            --box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
         }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f5f5;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
         }
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header h1 {
-            font-size: 20px;
-            margin-bottom: 5px;
-        }
-        .header p {
-            font-size: 14px;
-            opacity: 0.9;
-        }
+
         .container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            padding: 10px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
         }
-        #widget-container {
-            flex: 1;
-            min-height: 500px;
-            border: none;
-            border-radius: 12px;
-            overflow: hidden;
+
+        header {
             background: white;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .loading {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            margin-bottom: 20px;
             display: flex;
+            justify-content: space-between;
             align-items: center;
-            justify-content: center;
-            z-index: 1000;
         }
-        .loading.hidden {
+
+        h1 {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: var(--success-color);
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .widget-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .widget-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 20px;
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background-color 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: #545b62;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .btn-success:hover {
+            background-color: #218838;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+        }
+
+        .btn-danger:hover {
+            background-color: #c82333;
+        }
+
+        .btn-warning {
+            background-color: var(--warning-color);
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background-color: #e0a800;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .error {
+            border-left-color: var(--danger-color);
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .success {
+            border-left-color: var(--success-color);
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .warning {
+            border-left-color: var(--warning-color);
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .loading {
             display: none;
+            text-align: center;
+            padding: 20px;
         }
+
         .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
             width: 40px;
             height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
             animation: spin 1s linear infinite;
+            margin: 0 auto;
         }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .error-message {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #ff4757;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            display: none;
-            z-index: 1001;
+
+        .hidden {
+            display: none !important;
         }
-        .error-message.show {
+
+        .grid-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .grid-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .grid-1 {
+            grid-template-columns: 1fr;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
             display: block;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #ddd;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            border-bottom-color: var(--primary-color);
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 4px;
+            box-shadow: var(--box-shadow);
+            border-left: 4px solid var(--primary-color);
+            z-index: 1000;
+            transform: translateX(120%);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            border-left-color: var(--success-color);
+        }
+
+        .notification.error {
+            border-left-color: var(--danger-color);
+        }
+
+        .notification.warning {
+            border-left-color: var(--warning-color);
+        }
+
+        .map-container {
+            height: 400px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+
+        .parcel-item {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .parcel-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .parcel-info h4 {
+            margin-bottom: 5px;
+        }
+
+        .parcel-meta {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📦 Выберите пункт выдачи</h1>
-        <p>Нажмите на карту или список для выбора ПВЗ</p>
-    </div>
-    
     <div class="container">
-        <div class="map-container">
-            <div id="map" style="width: 100%; height: 100%;"></div>
+        <header>
+            <div>
+                <span class="status-indicator"></span>
+                <strong>FlexyFrame DPD Widget</strong>
+                <span style="margin-left: 20px; color: #666; font-size: 0.9rem;">Статус: <span id="connection-status">Подключено</span></span>
+            </div>
+            <div>
+                <button class="btn btn-secondary" onclick="refreshData()">Обновить данные</button>
+                <button class="btn btn-warning" onclick="clearCache()">Очистить кэш</button>
+            </div>
+        </header>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('dashboard')">Панель управления</div>
+            <div class="tab" onclick="switchTab('shipping')">Расчет доставки</div>
+            <div class="tab" onclick="switchTab('orders')">Заказы</div>
+            <div class="tab" onclick="switchTab('tracking')">Отслеживание</div>
+            <div class="tab" onclick="switchTab('management')">Управление доставкой</div>
+            <div class="tab" onclick="switchTab('reports')">Отчеты</div>
+            <div class="tab" onclick="switchTab('geography')">География</div>
+            <div class="tab" onclick="switchTab('admin')">Администрирование</div>
+        </div>
+
+        <!-- Панель управления -->
+        <div id="dashboard" class="tab-content active">
+            <div class="widget-grid grid-3">
+                <div class="stat-card">
+                    <span class="stat-number" id="total-orders">0</span>
+                    <span class="stat-label">Всего заказов</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="active-orders">0</span>
+                    <span class="stat-label">Активные заказы</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="delivered-orders">0</span>
+                    <span class="stat-label">Доставлено</span>
+                </div>
+            </div>
+
+            <div class="widget-grid grid-2" style="margin-top: 20px;">
+                <div class="card">
+                    <h2>Последние заказы</h2>
+                    <div id="recent-orders" class="results">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>Статус системы</h2>
+                    <div id="system-status" class="results">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Расчет доставки -->
+        <div id="shipping" class="tab-content">
+            <div class="widget-grid grid-2">
+                <div class="card">
+                    <h2>Рассчитать стоимость доставки</h2>
+                    <form id="shipping-form">
+                        <div class="form-group">
+                            <label for="from-city">Город отправления</label>
+                            <input type="text" id="from-city" placeholder="Введите город отправления">
+                        </div>
+                        <div class="form-group">
+                            <label for="to-city">Город назначения</label>
+                            <input type="text" id="to-city" placeholder="Введите город назначения">
+                        </div>
+                        <div class="form-group">
+                            <label for="weight">Вес (кг)</label>
+                            <input type="number" id="weight" step="0.1" placeholder="5.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="volume">Объем (м³)</label>
+                            <input type="number" id="volume" step="0.01" placeholder="0.05">
+                        </div>
+                        <div class="form-group">
+                            <label for="service-code">Услуга</label>
+                            <select id="service-code">
+                                <option value="PCL">DPD OPTIMUM</option>
+                                <option value="CUR">DPD CLASSIC</option>
+                                <option value="ECN">DPD ECONOMY</option>
+                                <option value="NDY">DPD EXPRESS</option>
+                                <option value="CSM">DPD Online Express</option>
+                            </select>
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" class="btn">Рассчитать</button>
+                            <button type="button" class="btn btn-secondary" onclick="calculateByParcels()">Рассчитать по посылкам</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Результат расчета</h2>
+                    <div id="shipping-result" class="results">
+                        <p>Введите параметры для расчета стоимости доставки.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Заказы -->
+        <div id="orders" class="tab-content">
+            <div class="widget-grid grid-2">
+                <div class="card">
+                    <h2>Создать заказ</h2>
+                    <form id="order-form">
+                        <div class="form-group">
+                            <label for="order-number">Номер заказа</label>
+                            <input type="text" id="order-number" placeholder="Номер заказа в системе">
+                        </div>
+                        <div class="form-group">
+                            <label for="service-variant">Вариант доставки</label>
+                            <select id="service-variant">
+                                <option value="ДД">От двери до двери</option>
+                                <option value="ДТ">От двери до терминала</option>
+                                <option value="ТД">От терминала до двери</option>
+                                <option value="ТТ">От терминала до терминала</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="cargo-weight">Вес груза (кг)</label>
+                            <input type="number" id="cargo-weight" step="0.1" placeholder="2.5">
+                        </div>
+                        <div class="form-group">
+                            <label for="cargo-category">Содержимое</label>
+                            <input type="text" id="cargo-category" placeholder="Одежда">
+                        </div>
+                        <div class="form-group">
+                            <label for="pickup-date">Дата приема</label>
+                            <input type="date" id="pickup-date">
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" class="btn btn-success">Создать заказ</button>
+                            <button type="button" class="btn btn-warning" onclick="cancelOrder()">Отменить заказ</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Список заказов</h2>
+                    <div id="orders-list" class="results">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Отслеживание -->
+        <div id="tracking" class="tab-content">
+            <div class="widget-grid grid-2">
+                <div class="card">
+                    <h2>Отследить заказ</h2>
+                    <form id="tracking-form">
+                        <div class="form-group">
+                            <label for="tracking-number">Номер заказа</label>
+                            <input type="text" id="tracking-number" placeholder="Введите номер заказа">
+                        </div>
+                        <div class="form-group">
+                            <label for="tracking-date">Дата приема (опционально)</label>
+                            <input type="date" id="tracking-date">
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" class="btn">Отследить</button>
+                            <button type="button" class="btn btn-secondary" onclick="getStatesByClient()">Получить все статусы</button>
+                            <button type="button" class="btn btn-secondary" onclick="getEvents()">Получить события</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>История статусов</h2>
+                    <div id="tracking-result" class="results">
+                        <p>Введите номер заказа для отслеживания.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Управление доставкой -->
+        <div id="management" class="tab-content">
+            <div class="widget-grid grid-2">
+                <div class="card">
+                    <h2>Изменить дату доставки</h2>
+                    <form id="delivery-date-form">
+                        <div class="form-group">
+                            <label for="change-order-number">Номер заказа</label>
+                            <input type="text" id="change-order-number" placeholder="Номер заказа">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-delivery-date">Новая дата доставки</label>
+                            <input type="date" id="new-delivery-date">
+                        </div>
+                        <div class="form-group">
+                            <label for="delivery-interval">Интервал доставки</label>
+                            <select id="delivery-interval">
+                                <option value="9-18">9:00 - 18:00</option>
+                                <option value="9-14">9:00 - 14:00</option>
+                                <option value="13-18">13:00 - 18:00</option>
+                                <option value="18-22">18:00 - 22:00</option>
+                            </select>
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" class="btn">Изменить дату</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Изменить адрес доставки</h2>
+                    <form id="address-form">
+                        <div class="form-group">
+                            <label for="address-order-number">Номер заказа</label>
+                            <input type="text" id="address-order-number" placeholder="Номер заказа">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-city">Город</label>
+                            <input type="text" id="new-city" placeholder="Новый город">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-street">Улица</label>
+                            <input type="text" id="new-street" placeholder="Новая улица">
+                        </div>
+                        <div class="form-group">
+                            <label for="new-house">Дом</label>
+                            <input type="text" id="new-house" placeholder="Новый дом">
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" class="btn">Изменить адрес</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Отчеты -->
+        <div id="reports" class="tab-content">
+            <div class="widget-grid grid-2">
+                <div class="card">
+                    <h2>Генерация отчетов</h2>
+                    <form id="report-form">
+                        <div class="form-group">
+                            <label for="report-type">Тип отчета</label>
+                            <select id="report-type">
+                                <option value="nl_amount">Предварительная стоимость</option>
+                                <option value="nl_invoice">Окончательная стоимость</option>
+                                <option value="waybill">Скан накладной</option>
+                                <option value="link_check">Ссылка на чек</option>
+                                <option value="receipts_statistics">Статистика чеков</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="report-date-from">Дата с</label>
+                            <input type="date" id="report-date-from">
+                        </div>
+                        <div class="form-group">
+                            <label for="report-date-to">Дата по</label>
+                            <input type="date" id="report-date-to">
+                        </div>
+                        <div class="form-group">
+                            <label for="report-order-num">Номер заказа (для waybill)</label>
+                            <input type="text" id="report-order-num" placeholder="Номер заказа">
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" class="btn">Сгенерировать отчет</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Результат отчета</h2>
+                    <div id="report-result" class="results">
+                        <p>Выберите тип отчета и укажите параметры.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- География -->
+        <div id="geography" class="tab-content">
+            <div class="widget-grid grid-2">
+                <div class="card">
+                    <h2>География DPD</h2>
+                    <form id="geography-form">
+                        <div class="form-group">
+                            <label for="geo-type">Тип данных</label>
+                            <select id="geo-type">
+                                <option value="cities_cash_pay">Города с наложенным платежом</option>
+                                <option value="parcel_shops">Пункты выдачи</option>
+                                <option value="terminals">Терминалы</option>
+                                <option value="storage_period">Сроки хранения</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="geo-country">Страна</label>
+                            <input type="text" id="geo-country" value="RU" placeholder="RU">
+                        </div>
+                        <div class="form-group">
+                            <label for="geo-region">Регион</label>
+                            <input type="text" id="geo-region" placeholder="77">
+                        </div>
+                        <div class="form-group">
+                            <label for="geo-city">Город</label>
+                            <input type="text" id="geo-city" placeholder="Москва">
+                        </div>
+                        <div class="btn-group">
+                            <button type="submit" class="btn">Получить данные</button>
+                            <button type="button" class="btn btn-secondary" onclick="updateGeographyCache()">Обновить кэш</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Результат географии</h2>
+                    <div id="geography-result" class="results">
+                        <p>Выберите тип данных для получения информации.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Администрирование -->
+        <div id="admin" class="tab-content">
+            <div class="widget-grid grid-2">
+                <div class="card">
+                    <h2>Администрирование</h2>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" onclick="getSystemStats()">Статистика системы</button>
+                        <button class="btn btn-secondary" onclick="getProblemOrders()">Проблемные заказы</button>
+                        <button class="btn btn-secondary" onclick="getNotificationsStats()">Статистика уведомлений</button>
+                        <button class="btn btn-secondary" onclick="getAdminStats()">Статистика администратора</button>
+                    </div>
+                    <div style="margin-top: 20px;">
+                        <h3>Настройки</h3>
+                        <div class="form-group">
+                            <label for="test-mode">Тестовый режим</label>
+                            <input type="checkbox" id="test-mode" style="width: auto;">
+                        </div>
+                        <div class="form-group">
+                            <label for="notification-enabled">Уведомления включены</label>
+                            <input type="checkbox" id="notification-enabled" style="width: auto;">
+                        </div>
+                        <div class="form-group">
+                            <label for="admin-enabled">Администрирование включено</label>
+                            <input type="checkbox" id="admin-enabled" style="width: auto;">
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h2>Результат администрирования</h2>
+                    <div id="admin-result" class="results">
+                        <p>Выберите действие для администрирования.</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Leaflet (OpenStreetMap) - бесплатные карты -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
+    <!-- Уведомления -->
+    <div id="notification" class="notification"></div>
+
     <script>
-        // Конфигурация
-        const API_BASE = window.location.origin;
-        
-        // Получаем город из URL параметра
-        const urlParams = new URLSearchParams(window.location.search);
-        let cityName = urlParams.get('city') || 'Москва';
-        
-        // Карта и маркеры
-        let map = null;
-        let markers = [];
-        
+        // Глобальные переменные
+        let currentTab = 'dashboard';
+        let systemStats = {};
+        let recentOrders = [];
+        let isTestMode = true;
+
         // Инициализация
-        async function init() {
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWidget();
+            loadInitialData();
+        });
+
+        function initializeWidget() {
+            // Устанавливаем текущую дату по умолчанию
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('pickup-date').value = today;
+            document.getElementById('report-date-from').value = today;
+            document.getElementById('report-date-to').value = today;
+            document.getElementById('report-date-from').max = today;
+            document.getElementById('report-date-to').max = today;
+
+            // Настраиваем обработчики форм
+            setupFormHandlers();
+            
+            // Проверяем подключение к DPD API
+            checkConnection();
+        }
+
+        function setupFormHandlers() {
+            // Форма расчета доставки
+            document.getElementById('shipping-form').onsubmit = async function(e) {
+                e.preventDefault();
+                await calculateShipping();
+            };
+
+            // Форма создания заказа
+            document.getElementById('order-form').onsubmit = async function(e) {
+                e.preventDefault();
+                await createOrder();
+            };
+
+            // Форма отслеживания
+            document.getElementById('tracking-form').onsubmit = async function(e) {
+                e.preventDefault();
+                await trackOrder();
+            };
+
+            // Форма изменения даты доставки
+            document.getElementById('delivery-date-form').onsubmit = async function(e) {
+                e.preventDefault();
+                await changeDeliveryDate();
+            };
+
+            // Форма изменения адреса
+            document.getElementById('address-form').onsubmit = async function(e) {
+                e.preventDefault();
+                await changeDeliveryAddress();
+            };
+
+            // Форма отчетов
+            document.getElementById('report-form').onsubmit = async function(e) {
+                e.preventDefault();
+                await generateReport();
+            };
+
+            // Форма географии
+            document.getElementById('geography-form').onsubmit = async function(e) {
+                e.preventDefault();
+                await getGeographyData();
+            };
+        }
+
+        // Переключение вкладок
+        function switchTab(tabName) {
+            // Скрываем все вкладки
+            const tabs = document.querySelectorAll('.tab-content');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Убираем активный класс у всех вкладок
+            const tabButtons = document.querySelectorAll('.tab');
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            
+            // Показываем выбранную вкладку
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            currentTab = tabName;
+        }
+
+        // Проверка подключения
+        async function checkConnection() {
             try {
-                // Загружаем ПВЗ с сервера
-                const response = await fetch(`${API_BASE}/api/dpd/pickup-points?city=${encodeURIComponent(cityName)}`);
-                const data = await response.json();
+                // Здесь можно добавить реальную проверку подключения к DPD API
+                const statusElement = document.getElementById('connection-status');
+                statusElement.textContent = 'Подключено';
+                statusElement.style.color = 'green';
+            } catch (error) {
+                showNotification('Ошибка подключения к DPD API', 'error');
+            }
+        }
+
+        // Загрузка начальных данных
+        async function loadInitialData() {
+            try {
+                // Загружаем статистику
+                await getSystemStats();
                 
-                if (data.error) {
-                    showError(data.message || 'Ошибка загрузки ПВЗ');
-                    document.getElementById('loading').classList.add('hidden');
-                    return;
-                }
+                // Загружаем последние заказы
+                await loadRecentOrders();
                 
-                const pickupPoints = data.points || [];
-                
-                if (pickupPoints.length === 0) {
-                    showError('Пункты выдачи не найдены для этого города');
-                    document.getElementById('loading').classList.add('hidden');
-                    return;
-                }
-                
-                // Центр карты - по первому ПВЗ или координатам
-                let center = [55.7558, 37.6173]; // Москва по умолчанию
-                
-                // Ищем ПВЗ с координатами
-                const pointWithCoords = pickupPoints.find(p => p.lat && p.lon);
-                if (pointWithCoords && pointWithCoords.lat && pointWithCoords.lon) {
-                    center = [parseFloat(pointWithCoords.lat), parseFloat(pointWithCoords.lon)];
-                } else if (pickupPoints[0] && pickupPoints[0].coordinates) {
-                    center = [
-                        parseFloat(pickupPoints[0].coordinates.latitude), 
-                        parseFloat(pickupPoints[0].coordinates.longitude)
-                    ];
-                }
-                
-                // Инициализация карты
-                map = L.map('map').setView(center, 12);
-                
-                // Слой карты
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap'
-                }).addTo(map);
-                
-                // Добавляем маркеры
-                pickupPoints.forEach((point, index) => {
-                    let lat, lon;
-                    
-                    if (point.lat && point.lon) {
-                        lat = parseFloat(point.lat);
-                        lon = parseFloat(point.lon);
-                    } else if (point.coordinates) {
-                        lat = parseFloat(point.coordinates.latitude);
-                        lon = parseFloat(point.coordinates.longitude);
-                    } else {
-                        return; // Пропускаем без координат
-                    }
-                    
-                    const marker = L.marker([lat, lon]).addTo(map);
-                    const address = point.address || point.name;
-                    const name = point.name || 'ПВЗ';
-                    const schedule = point.schedule || '';
-                    
-                    marker.bindPopup(`
-                        <div style="min-width: 150px;">
-                            <b>${name}</b><br>
-                            <span style="font-size: 12px;">${address}</span><br>
-                            <span style="font-size: 11px; color: #666;">${schedule}</span><br>
-                            <button onclick="selectPickupPoint('${name}', '${address.replace(/'/g, "\\'")}', ${lat}, ${lon})" 
-                                style="margin-top: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                                Выбрать
-                            </button>
-                        </div>
-                    `);
-                    
-                    markers.push(marker);
-                });
-                
-                // Автоподбор центра
-                if (markers.length > 0) {
-                    const group = L.featureGroup(markers);
-                    map.fitBounds(group.getBounds().pad(0.1));
-                }
-                
-                document.getElementById('loading').classList.add('hidden');
+                // Обновляем статус системы
+                updateSystemStatus();
                 
             } catch (error) {
-                console.error('Ошибка загрузки:', error);
-                showError('Не удалось загрузить карту. Попробуйте позже.');
-                document.getElementById('loading').classList.add('hidden');
+                console.error('Error loading initial data:', error);
             }
         }
-        
-        // Функция выбора ПВЗ
-        function selectPickupPoint(name, address, lat, lon) {
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.sendData(JSON.stringify({
-                    type: 'pickup_point',
-                    pickupPointId: name,
-                    address: address,
-                    name: name,
-                    latitude: lat,
-                    longitude: lon
-                }));
-                window.Telegram.WebApp.close();
-            } else {
-                // Для отладки
-                alert('Выбран: ' + name + '\n' + address);
+
+        // Расчет доставки
+        async function calculateShipping() {
+            const fromCity = document.getElementById('from-city').value;
+            const toCity = document.getElementById('to-city').value;
+            const weight = parseFloat(document.getElementById('weight').value);
+            const volume = parseFloat(document.getElementById('volume').value);
+            const serviceCode = document.getElementById('service-code').value;
+
+            if (!fromCity || !toCity || !weight || !volume) {
+                showNotification('Заполните все поля', 'warning');
+                return;
             }
-        }
-        
-        // Запуск
-        init();
-    </script>
 
-    <div class="loading" id="loading">
-        <div class="spinner"></div>
-    </div>
-
-    <div class="error-message" id="error"></div>
-
-    <script>
-        // Скрываем загрузку когда виджет готов
-        const iframe = document.getElementById('widget-container');
-        const loading = document.getElementById('loading');
-        const errorEl = document.getElementById('error');
-        
-        // Показываем/скрываем загрузку
-        iframe.addEventListener('load', () => {
-            setTimeout(() => {
-                loading.classList.add('hidden');
-            }, 1000);
-        });
-
-        // Обработка сообщений от виджета DPD
-        window.addEventListener('message', (event) => {
-            console.log('📦 Получено сообщение от DPD Widget:', event.data);
+            showLoading('shipping-result');
             
-            // Проверяем, что это сообщение от DPD виджета
-            if (event.data && event.data.dpdWidget) {
-                const widgetData = event.data.dpdWidget;
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockCalculateShipping(fromCity, toCity, weight, volume, serviceCode);
                 
-                if (widgetData.pickupPointResult) {
-                    // Пользователь выбрал пункт выдачи
-                    const pickupPoint = widgetData.pickupPointResult;
-                    
-                    console.log('✅ Выбран ПВЗ:', pickupPoint);
-                    
-                    // Отправляем данные в бота через Telegram Web App API
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.sendData(JSON.stringify({
-                            type: 'pickup_point',
-                            pickupPointId: pickupPoint.id || pickupPoint.pickupPointId,
-                            address: pickupPoint.address || pickupPoint.name,
-                            name: pickupPoint.name || pickupPoint.pickupPointName,
-                            description: pickupPoint.description,
-                            latitude: pickupPoint.latitude,
-                            longitude: pickupPoint.longitude
-                        }));
-                        
-                        // Закрываем Web App
-                        setTimeout(() => {
-                            window.Telegram.WebApp.close();
-                        }, 500);
-                    } else {
-                        // Для отладки - показываем данные
-                        alert('Выбран пункт: ' + (pickupPoint.address || pickupPoint.name));
-                    }
-                }
+                displayShippingResult(result);
+                showNotification('Расчет выполнен успешно', 'success');
+            } catch (error) {
+                displayError('shipping-result', error.message);
+                showNotification('Ошибка расчета стоимости', 'error');
             }
-        });
+        }
 
-        // Обработка ошибок
-        window.addEventListener('error', (event) => {
-            console.error('Ошибка:', event.error);
-            showError('Произошла ошибка при загрузке виджета');
-        });
+        // Расчет по посылкам
+        async function calculateByParcels() {
+            const fromCity = document.getElementById('from-city').value;
+            const toCity = document.getElementById('to-city').value;
+            const serviceCode = document.getElementById('service-code').value;
 
-        function showError(message) {
-            errorEl.textContent = message;
-            errorEl.classList.add('show');
+            if (!fromCity || !toCity) {
+                showNotification('Заполните город отправления и назначения', 'warning');
+                return;
+            }
+
+            showLoading('shipping-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockCalculateByParcels(fromCity, toCity, serviceCode);
+                
+                displayShippingResult(result);
+                showNotification('Расчет по посылкам выполнен', 'success');
+            } catch (error) {
+                displayError('shipping-result', error.message);
+                showNotification('Ошибка расчета по посылкам', 'error');
+            }
+        }
+
+        // Создание заказа
+        async function createOrder() {
+            const orderNumber = document.getElementById('order-number').value;
+            const serviceVariant = document.getElementById('service-variant').value;
+            const cargoWeight = parseFloat(document.getElementById('cargo-weight').value);
+            const cargoCategory = document.getElementById('cargo-category').value;
+            const pickupDate = document.getElementById('pickup-date').value;
+
+            if (!orderNumber || !cargoWeight || !cargoCategory || !pickupDate) {
+                showNotification('Заполните все обязательные поля', 'warning');
+                return;
+            }
+
+            showLoading('orders-list');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockCreateOrder(orderNumber, serviceVariant, cargoWeight, cargoCategory, pickupDate);
+                
+                displayOrderResult(result);
+                await loadRecentOrders();
+                showNotification('Заказ создан успешно', 'success');
+            } catch (error) {
+                displayError('orders-list', error.message);
+                showNotification('Ошибка создания заказа', 'error');
+            }
+        }
+
+        // Отслеживание заказа
+        async function trackOrder() {
+            const trackingNumber = document.getElementById('tracking-number').value;
+            const trackingDate = document.getElementById('tracking-date').value;
+
+            if (!trackingNumber) {
+                showNotification('Введите номер заказа', 'warning');
+                return;
+            }
+
+            showLoading('tracking-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockTrackOrder(trackingNumber, trackingDate);
+                
+                displayTrackingResult(result);
+                showNotification('Отслеживание выполнено', 'success');
+            } catch (error) {
+                displayError('tracking-result', error.message);
+                showNotification('Ошибка отслеживания', 'error');
+            }
+        }
+
+        // Получение всех статусов
+        async function getStatesByClient() {
+            showLoading('tracking-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockGetStatesByClient();
+                
+                displayTrackingResult(result);
+                showNotification('Статусы получены', 'success');
+            } catch (error) {
+                displayError('tracking-result', error.message);
+                showNotification('Ошибка получения статусов', 'error');
+            }
+        }
+
+        // Получение событий
+        async function getEvents() {
+            showLoading('tracking-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockGetEvents();
+                
+                displayTrackingResult(result);
+                showNotification('События получены', 'success');
+            } catch (error) {
+                displayError('tracking-result', error.message);
+                showNotification('Ошибка получения событий', 'error');
+            }
+        }
+
+        // Изменение даты доставки
+        async function changeDeliveryDate() {
+            const orderNumber = document.getElementById('change-order-number').value;
+            const newDate = document.getElementById('new-delivery-date').value;
+            const interval = document.getElementById('delivery-interval').value;
+
+            if (!orderNumber || !newDate) {
+                showNotification('Заполните все обязательные поля', 'warning');
+                return;
+            }
+
+            showLoading('management');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockChangeDeliveryDate(orderNumber, newDate, interval);
+                
+                displayManagementResult(result);
+                showNotification('Дата доставки изменена', 'success');
+            } catch (error) {
+                displayError('management', error.message);
+                showNotification('Ошибка изменения даты', 'error');
+            }
+        }
+
+        // Изменение адреса доставки
+        async function changeDeliveryAddress() {
+            const orderNumber = document.getElementById('address-order-number').value;
+            const city = document.getElementById('new-city').value;
+            const street = document.getElementById('new-street').value;
+            const house = document.getElementById('new-house').value;
+
+            if (!orderNumber || !city || !street || !house) {
+                showNotification('Заполните все обязательные поля', 'warning');
+                return;
+            }
+
+            showLoading('management');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockChangeDeliveryAddress(orderNumber, city, street, house);
+                
+                displayManagementResult(result);
+                showNotification('Адрес доставки изменен', 'success');
+            } catch (error) {
+                displayError('management', error.message);
+                showNotification('Ошибка изменения адреса', 'error');
+            }
+        }
+
+        // Генерация отчета
+        async function generateReport() {
+            const type = document.getElementById('report-type').value;
+            const dateFrom = document.getElementById('report-date-from').value;
+            const dateTo = document.getElementById('report-date-to').value;
+            const orderNum = document.getElementById('report-order-num').value;
+
+            if (!dateFrom || !dateTo) {
+                showNotification('Укажите период отчета', 'warning');
+                return;
+            }
+
+            showLoading('report-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockGenerateReport(type, dateFrom, dateTo, orderNum);
+                
+                displayReportResult(result);
+                showNotification('Отчет сгенерирован', 'success');
+            } catch (error) {
+                displayError('report-result', error.message);
+                showNotification('Ошибка генерации отчета', 'error');
+            }
+        }
+
+        // Получение географии
+        async function getGeographyData() {
+            const type = document.getElementById('geo-type').value;
+            const country = document.getElementById('geo-country').value;
+            const region = document.getElementById('geo-region').value;
+            const city = document.getElementById('geo-city').value;
+
+            showLoading('geography-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockGetGeographyData(type, country, region, city);
+                
+                displayGeographyResult(result);
+                showNotification('География получена', 'success');
+            } catch (error) {
+                displayError('geography-result', error.message);
+                showNotification('Ошибка получения географии', 'error');
+            }
+        }
+
+        // Отмена заказа
+        async function cancelOrder() {
+            const orderNumber = document.getElementById('order-number').value;
+            
+            if (!orderNumber) {
+                showNotification('Введите номер заказа', 'warning');
+                return;
+            }
+
+            if (!confirm('Вы уверены, что хотите отменить заказ?')) {
+                return;
+            }
+
+            showLoading('orders-list');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockCancelOrder(orderNumber);
+                
+                displayOrderResult(result);
+                await loadRecentOrders();
+                showNotification('Заказ отменен', 'success');
+            } catch (error) {
+                displayError('orders-list', error.message);
+                showNotification('Ошибка отмены заказа', 'error');
+            }
+        }
+
+        // Загрузка последних заказов
+        async function loadRecentOrders() {
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                recentOrders = await mockGetRecentOrders();
+                displayRecentOrders(recentOrders);
+            } catch (error) {
+                console.error('Error loading recent orders:', error);
+            }
+        }
+
+        // Получение статистики системы
+        async function getSystemStats() {
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                systemStats = await mockGetSystemStats();
+                displaySystemStats(systemStats);
+            } catch (error) {
+                console.error('Error getting system stats:', error);
+            }
+        }
+
+        // Получение проблемных заказов
+        async function getProblemOrders() {
+            showLoading('admin-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockGetProblemOrders();
+                
+                displayAdminResult(result);
+                showNotification('Проблемные заказы получены', 'success');
+            } catch (error) {
+                displayError('admin-result', error.message);
+                showNotification('Ошибка получения проблемных заказов', 'error');
+            }
+        }
+
+        // Получение статистики уведомлений
+        async function getNotificationsStats() {
+            showLoading('admin-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockGetNotificationsStats();
+                
+                displayAdminResult(result);
+                showNotification('Статистика уведомлений получена', 'success');
+            } catch (error) {
+                displayError('admin-result', error.message);
+                showNotification('Ошибка получения статистики уведомлений', 'error');
+            }
+        }
+
+        // Получение статистики администратора
+        async function getAdminStats() {
+            showLoading('admin-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockGetAdminStats();
+                
+                displayAdminResult(result);
+                showNotification('Статистика администратора получена', 'success');
+            } catch (error) {
+                displayError('admin-result', error.message);
+                showNotification('Ошибка получения статистики администратора', 'error');
+            }
+        }
+
+        // Обновление кэша географии
+        async function updateGeographyCache() {
+            showLoading('geography-result');
+            
+            try {
+                // Здесь должен быть реальный вызов DPD API
+                const result = await mockUpdateGeographyCache();
+                
+                displayGeographyResult(result);
+                showNotification('Кэш географии обновлен', 'success');
+            } catch (error) {
+                displayError('geography-result', error.message);
+                showNotification('Ошибка обновления кэша', 'error');
+            }
+        }
+
+        // Обновление данных
+        async function refreshData() {
+            showNotification('Обновление данных...', 'warning');
+            await loadInitialData();
+            showNotification('Данные обновлены', 'success');
+        }
+
+        // Очистка кэша
+        function clearCache() {
+            if (confirm('Вы уверены, что хотите очистить кэш?')) {
+                // Здесь можно реализовать очистку кэша
+                localStorage.clear();
+                showNotification('Кэш очищен', 'success');
+            }
+        }
+
+        // Обновление статуса системы
+        function updateSystemStatus() {
+            const statusElement = document.getElementById('system-status');
+            const status = systemStats.isRunning ? 'Работает' : 'Остановлен';
+            const color = systemStats.isRunning ? 'success' : 'error';
+            
+            statusElement.innerHTML = `
+                <strong>Статус системы:</strong> ${status}<br>
+                <strong>Время работы:</strong> ${formatUptime(systemStats.uptime)}<br>
+                <strong>Операции:</strong> ${systemStats.totalOperations}<br>
+                <strong>Ошибки:</strong> ${systemStats.errors}
+            `;
+            statusElement.className = `results ${color}`;
+        }
+
+        // Отображение результата расчета доставки
+        function displayShippingResult(result) {
+            const element = document.getElementById('shipping-result');
+            element.className = 'results success';
+            element.innerHTML = `
+                <h3>Результат расчета:</h3>
+                <p><strong>Услуга:</strong> ${result.serviceName}</p>
+                <p><strong>Стоимость:</strong> ${result.totalCost} руб.</p>
+                <p><strong>Срок доставки:</strong> ${result.days} дней</p>
+                <p><strong>Вес:</strong> ${result.weight} кг</p>
+                <p><strong>Объем:</strong> ${result.volume} м³</p>
+            `;
+        }
+
+        // Отображение результата создания заказа
+        function displayOrderResult(result) {
+            const element = document.getElementById('orders-list');
+            element.className = 'results success';
+            element.innerHTML = `
+                <h3>Результат операции:</h3>
+                <p><strong>Статус:</strong> ${result.success ? 'Успешно' : 'Ошибка'}</p>
+                <p><strong>Номер заказа:</strong> ${result.orderNum || 'N/A'}</p>
+                <p><strong>Сообщение:</strong> ${result.message || ''}</p>
+            `;
+        }
+
+        // Отображение результата отслеживания
+        function displayTrackingResult(result) {
+            const element = document.getElementById('tracking-result');
+            element.className = 'results success';
+            
+            if (result.states && result.states.length > 0) {
+                let html = '<h3>История статусов:</h3>';
+                result.states.forEach(state => {
+                    html += `
+                        <div class="parcel-item">
+                            <div class="parcel-info">
+                                <h4>${state.newState}</h4>
+                                <div class="parcel-meta">
+                                    <span>Время: ${state.transitionTime}</span><br>
+                                    <span>Терминал: ${state.terminalCode}</span><br>
+                                    <span>Город: ${state.terminalCity}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                element.innerHTML = html;
+            } else {
+                element.innerHTML = '<p>Статусы не найдены</p>';
+            }
+        }
+
+        // Отображение результата управления доставкой
+        function displayManagementResult(result) {
+            const element = document.getElementById('management');
+            element.className = 'results success';
+            element.innerHTML = `
+                <h3>Результат операции:</h3>
+                <p><strong>Статус:</strong> ${result.success ? 'Успешно' : 'Ошибка'}</p>
+                <p><strong>Сообщение:</strong> ${result.message || ''}</p>
+            `;
+        }
+
+        // Отображение результата отчета
+        function displayReportResult(result) {
+            const element = document.getElementById('report-result');
+            element.className = 'results success';
+            element.innerHTML = `
+                <h3>Результат отчета:</h3>
+                <p><strong>Тип:</strong> ${result.type}</p>
+                <p><strong>Период:</strong> ${result.dateFrom} - ${result.dateTo}</p>
+                <p><strong>Количество записей:</strong> ${result.count}</p>
+                <p><strong>Сумма:</strong> ${result.totalAmount || 'N/A'}</p>
+            `;
+        }
+
+        // Отображение результата географии
+        function displayGeographyResult(result) {
+            const element = document.getElementById('geography-result');
+            element.className = 'results success';
+            
+            if (result.cities && result.cities.length > 0) {
+                let html = '<h3>Города с наложенным платежом:</h3>';
+                result.cities.forEach(city => {
+                    html += `
+                        <div class="parcel-item">
+                            <div class="parcel-info">
+                                <h4>${city.cityName}</h4>
+                                <div class="parcel-meta">
+                                    <span>Страна: ${city.countryName}</span><br>
+                                    <span>Регион: ${city.regionName}</span><br>
+                                    <span>Индекс: ${city.indexMin} - ${city.indexMax}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                element.innerHTML = html;
+            } else {
+                element.innerHTML = '<p>Данные не найдены</p>';
+            }
+        }
+
+        // Отображение последних заказов
+        function displayRecentOrders(orders) {
+            const element = document.getElementById('recent-orders');
+            element.className = 'results';
+            
+            if (orders && orders.length > 0) {
+                let html = '<h3>Последние заказы:</h3>';
+                orders.forEach(order => {
+                    html += `
+                        <div class="parcel-item">
+                            <div class="parcel-info">
+                                <h4>Заказ: ${order.orderNumber}</h4>
+                                <div class="parcel-meta">
+                                    <span>Статус: ${order.status}</span><br>
+                                    <span>Дата: ${order.date}</span><br>
+                                    <span>Сумма: ${order.amount} руб.</span>
+                                </div>
+                            </div>
+                            <div>
+                                <button class="btn btn-secondary" onclick="viewOrderDetails('${order.orderNumber}')">Детали</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                element.innerHTML = html;
+            } else {
+                element.innerHTML = '<p>Заказы не найдены</p>';
+            }
+        }
+
+        // Отображение статистики системы
+        function displaySystemStats(stats) {
+            document.getElementById('total-orders').textContent = stats.totalOrders || 0;
+            document.getElementById('active-orders').textContent = stats.activeOrders || 0;
+            document.getElementById('delivered-orders').textContent = stats.deliveredOrders || 0;
+        }
+
+        // Отображение результата администрирования
+        function displayAdminResult(result) {
+            const element = document.getElementById('admin-result');
+            element.className = 'results success';
+            element.innerHTML = `
+                <h3>Результат операции:</h3>
+                <p><strong>Тип:</strong> ${result.type}</p>
+                <p><strong>Количество:</strong> ${result.count}</p>
+                <p><strong>Детали:</strong> ${result.details || ''}</p>
+            `;
+        }
+
+        // Показ уведомления
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+
             setTimeout(() => {
-                errorEl.classList.remove('show');
+                notification.classList.remove('show');
             }, 3000);
         }
 
-        // Инициализация Telegram Web App
-        if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
+        // Показ загрузки
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+        }
+
+        // Отображение ошибки
+        function displayError(elementId, message) {
+            const element = document.getElementById(elementId);
+            element.className = 'results error';
+            element.innerHTML = `<p><strong>Ошибка:</strong> ${message}</p>`;
+        }
+
+        // Форматирование времени работы
+        function formatUptime(uptime) {
+            if (!uptime) return '00:00:00';
+            
+            const seconds = Math.floor(uptime / 1000);
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Моковые функции для демонстрации (в реальной системе здесь будут вызовы DPD API)
+        async function mockCalculateShipping(from, to, weight, volume, serviceCode) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        serviceName: serviceCode === 'PCL' ? 'DPD OPTIMUM' : 'DPD CLASSIC',
+                        totalCost: Math.round((weight * 100 + volume * 500) * (Math.random() * 0.5 + 0.8)),
+                        days: serviceCode === 'PCL' ? 2 : 3,
+                        weight: weight,
+                        volume: volume
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockCalculateByParcels(from, to, serviceCode) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        serviceName: serviceCode === 'PCL' ? 'DPD OPTIMUM' : 'DPD CLASSIC',
+                        totalCost: Math.round(Math.random() * 2000 + 500),
+                        days: serviceCode === 'PCL' ? 2 : 3,
+                        parcels: [
+                            { weight: 2, length: 30, width: 20, height: 15 },
+                            { weight: 3, length: 40, width: 30, height: 20 }
+                        ]
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockCreateOrder(orderNumber, serviceVariant, cargoWeight, cargoCategory, pickupDate) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        success: true,
+                        orderNum: `DPD-${Date.now()}`,
+                        message: 'Заказ успешно создан'
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockTrackOrder(trackingNumber, trackingDate) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        states: [
+                            {
+                                newState: 'Delivering',
+                                transitionTime: new Date().toISOString(),
+                                terminalCode: 'M13',
+                                terminalCity: 'Москва'
+                            },
+                            {
+                                newState: 'OnTerminal',
+                                transitionTime: new Date(Date.now() - 3600000).toISOString(),
+                                terminalCode: 'M13',
+                                terminalCity: 'Москва'
+                            }
+                        ]
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGetStatesByClient() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        states: [
+                            {
+                                newState: 'Delivered',
+                                transitionTime: new Date().toISOString(),
+                                terminalCode: 'LED',
+                                terminalCity: 'Санкт-Петербург'
+                            }
+                        ]
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGetEvents() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        events: [
+                            {
+                                eventCode: '3304',
+                                eventName: 'Заказ доставлен до двери',
+                                eventDate: new Date().toISOString()
+                            }
+                        ]
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockChangeDeliveryDate(orderNumber, newDate, interval) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        success: true,
+                        message: 'Дата доставки успешно изменена'
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockChangeDeliveryAddress(orderNumber, city, street, house) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        success: true,
+                        message: 'Адрес доставки успешно изменен'
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGenerateReport(type, dateFrom, dateTo, orderNum) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        type: type,
+                        dateFrom: dateFrom,
+                        dateTo: dateTo,
+                        count: Math.floor(Math.random() * 100),
+                        totalAmount: Math.floor(Math.random() * 100000)
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGetGeographyData(type, country, region, city) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        cities: [
+                            {
+                                cityName: city || 'Москва',
+                                countryName: country || 'Россия',
+                                regionName: region || 'Московская обл.',
+                                indexMin: '100000',
+                                indexMax: '140000'
+                            }
+                        ]
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockCancelOrder(orderNumber) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        success: true,
+                        message: 'Заказ успешно отменен'
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGetRecentOrders() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve([
+                        {
+                            orderNumber: 'DPD-001',
+                            status: 'Delivered',
+                            date: '2024-01-15',
+                            amount: 1500
+                        },
+                        {
+                            orderNumber: 'DPD-002',
+                            status: 'Delivering',
+                            date: '2024-01-16',
+                            amount: 2500
+                        }
+                    ]);
+                }, 1000);
+            });
+        }
+
+        async function mockGetSystemStats() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        isRunning: true,
+                        uptime: 3600000,
+                        totalOperations: 150,
+                        errors: 5,
+                        totalOrders: 100,
+                        activeOrders: 30,
+                        deliveredOrders: 70
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGetProblemOrders() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        type: 'problem_orders',
+                        count: 5,
+                        details: 'Заказы с проблемными статусами'
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGetNotificationsStats() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        type: 'notifications',
+                        count: 120,
+                        details: 'Отправлено уведомлений клиентам'
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockGetAdminStats() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        type: 'admin_stats',
+                        count: 50,
+                        details: 'Административных операций'
+                    });
+                }, 1000);
+            });
+        }
+
+        async function mockUpdateGeographyCache() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve({
+                        cities: [
+                            {
+                                cityName: 'Москва',
+                                countryName: 'Россия',
+                                regionName: 'Московская обл.',
+                                indexMin: '100000',
+                                indexMax: '140000'
+                            }
+                        ]
+                    });
+                }, 1000);
+            });
+        }
+
+        // Функция для просмотра деталей заказа
+        function viewOrderDetails(orderNumber) {
+            alert(`Детали заказа: ${orderNumber}`);
         }
     </script>
 </body>
